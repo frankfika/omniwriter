@@ -25,12 +25,24 @@ interface ImageSearchResponse {
   warnings?: string[];
 }
 
+// 传给编辑器的「光标处插图」载荷；编辑器不可用时面板降级为文末追加。
+export interface CursorImageInsert {
+  dataUrl: string;
+  alt: string;
+  caption: string;
+  sourceUrl: string;
+  sourceLabel: string;
+  license: string;
+  creator: string;
+}
+
 export interface ImageSearchPanelProps {
   sourceUrl?: string;
   initialQuery?: string;
   content: string;
   onChange: (content: string) => void;
   onClose: () => void;
+  onInsertAtCursor?: (image: CursorImageInsert) => boolean;
   className?: string;
 }
 
@@ -40,6 +52,7 @@ export function ImageSearchPanel({
   content,
   onChange,
   onClose,
+  onInsertAtCursor,
   className,
 }: ImageSearchPanelProps) {
   const [query, setQuery] = React.useState(initialQuery);
@@ -134,7 +147,22 @@ export function ImageSearchPanel({
       }
 
       const dataUrl = await downscaleImage(blob);
-      onChange(appendNumberedFigure(content, dataUrl, candidate));
+      const figureNumber = (content.match(/<img(?:\s|>)/gi) ?? []).length + 1;
+      const figure = buildFigure(figureNumber, dataUrl, candidate);
+      // 优先插入当前光标处（作用于当前激活语言的编辑器）；不可用时降级为文末追加
+      const insertedAtCursor = onInsertAtCursor?.({
+        dataUrl,
+        alt: figure.plainCaption,
+        caption: figure.plainCaption,
+        sourceUrl: safeHttpUrl(candidate.sourcePageUrl),
+        sourceLabel: figure.sourceLabel,
+        license: candidate.license?.trim() ?? '',
+        creator: candidate.creator?.trim() ?? '',
+      }) ?? false;
+      if (!insertedAtCursor) {
+        const separator = content.trim() ? '\n' : '';
+        onChange(`${content}${separator}${figure.html}`);
+      }
       onClose();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '图片插入失败，请重试');
@@ -296,8 +324,7 @@ function isOriginalCandidate(candidate: ImageCandidate) {
   return origin === 'source' || origin === 'original' || origin === 'article';
 }
 
-function appendNumberedFigure(content: string, dataUrl: string, candidate: ImageCandidate) {
-  const figureNumber = (content.match(/<img(?:\s|>)/gi) ?? []).length + 1;
+function buildFigure(figureNumber: number, dataUrl: string, candidate: ImageCandidate) {
   const title = candidate.title.trim() || '文章配图';
   const sourceLabel = candidate.sourceLabel.trim() || sourceHost(candidate.sourcePageUrl) || '未标注';
   const sourceUrl = safeHttpUrl(candidate.sourcePageUrl);
@@ -307,15 +334,13 @@ function appendNumberedFigure(content: string, dataUrl: string, candidate: Image
   const creator = candidate.creator?.trim() ? `；作者：${escapeHtml(candidate.creator.trim())}` : '';
   const license = candidate.license?.trim() ? `；许可：${escapeHtml(candidate.license.trim())}` : '';
   const plainCaption = `图 ${figureNumber}｜${title}。图片来源：${sourceLabel}${candidate.creator?.trim() ? `；作者：${candidate.creator.trim()}` : ''}${candidate.license?.trim() ? `；许可：${candidate.license.trim()}` : ''}`;
-  const figure = [
+  const html = [
     '<figure>',
     `<img src="${escapeAttribute(dataUrl)}" alt="${escapeAttribute(plainCaption)}" data-source-url="${escapeAttribute(sourceUrl)}" data-source-label="${escapeAttribute(sourceLabel)}" data-image-license="${escapeAttribute(candidate.license?.trim() ?? '')}" data-creator="${escapeAttribute(candidate.creator?.trim() ?? '')}" />`,
     `<figcaption>图 ${figureNumber}｜${escapeHtml(title)}。图片来源：${source}${creator}${license}</figcaption>`,
     '</figure>',
   ].join('');
-
-  const separator = content.trim() ? '\n' : '';
-  return `${content}${separator}${figure}`;
+  return { html, plainCaption, sourceLabel };
 }
 
 function safeHttpUrl(value: string) {

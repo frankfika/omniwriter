@@ -11,6 +11,7 @@ const STAGE_INDEX: Record<GenerationStage, number> = {
   rules: 1,
   waiting: 2,
   streaming: 2,
+  translating: 2,
   checking: 3,
   done: 4,
 };
@@ -97,6 +98,7 @@ function getStageCopy(state: GenerationViewState) {
   if (state.stage === 'rules') return { title: '正在确定写法', detail: state.detail || '应用所选 Agent、风格和编辑准则。' };
   if (state.stage === 'waiting') return { title: '正在等待第一段正文', detail: '生成请求已提交，原稿在完整返回前不会被覆盖。' };
   if (state.stage === 'streaming') return { title: '原稿正在生成', detail: '正文片段正在真实返回，完成后会一次写入编辑器。' };
+  if (state.stage === 'translating') return { title: '正在补译英文版', detail: '中文正文已完成，正在生成英文部分。' };
   if (state.stage === 'checking') return { title: '正在做发布前检查', detail: '检查标题、结构与基础格式，然后交付原稿。' };
   return { title: '原稿已经完成', detail: state.detail || '正在进入编辑器。' };
 }

@@ -17,7 +17,7 @@ const hasProxyEnvironment = Boolean(
 // 通过代理时 DNS 由代理端解析，无法在连接时 pin；此时依赖 assertPublicUrl 的预校验。
 // 直连时用自定义 lookup 把解析结果再过滤一遍 blocklist，消除 DNS rebinding 竞态：
 // 校验时解析到公网、连接时又被解析回内网的二义地址无法建立连接。
-const validatedLookup: LookupFunction = (hostname, options, callback) => {
+const validatedLookup: LookupFunction = (hostname, _options, callback) => {
   lookup(hostname, { all: true })
     .then((addresses) => {
       const safe = addresses.filter(({ address }) => !isPrivateAddress(address));

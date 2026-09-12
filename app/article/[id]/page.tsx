@@ -2,11 +2,12 @@
 
 import * as React from 'react';
 import { useSearchParams } from 'next/navigation';
+import type { Editor as TiptapEditor } from '@tiptap/react';
 import { AppShell } from '@/components/AppShell';
 import { BriefPanel } from '@/components/BriefPanel';
 import { AgentCompose } from '@/components/AgentCompose';
 import { Editor } from '@/components/Editor';
-import { ImageSearchPanel } from '@/components/ImageSearchPanel';
+import { ImageSearchPanel, type CursorImageInsert } from '@/components/ImageSearchPanel';
 import { PreviewPane } from '@/components/PreviewPane';
 import { PlatformTabs } from '@/components/PlatformTabs';
 import { ValidationStrip } from '@/components/ValidationStrip';
@@ -14,7 +15,8 @@ import { CreativeCopilot } from '@/components/CreativeCopilot';
 import { GenerationProgress } from '@/components/GenerationProgress';
 import { useArticleStore } from '@/src/lib/store';
 import { loadAiConfig } from '@/src/lib/ai-config';
-import { loadConfig } from '@/src/lib/config';
+import { loadConfig, getAgentOverride } from '@/src/lib/config';
+import { getCustomAgent } from '@/src/lib/custom-agents';
 import { collectContentImages } from '@/src/lib/images';
 import { PLATFORMS, PLATFORM_ORDER } from '@/src/lib/platforms';
 import type { Brief, CreatorAgentId, PlatformId } from '@/src/lib/types';
@@ -72,6 +74,9 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
   const [language, setLanguage] = React.useState<ContentLanguage>('zh');
   const [commandBusy, setCommandBusy] = React.useState(false);
   const { error, show: showError, dismiss: dismissError } = useError();
+  // 当前激活语言的 TipTap 实例（配图面板在光标处插图用）；导出 ZIP 的防连点标记
+  const editorInstanceRef = React.useRef<TiptapEditor | null>(null);
+  const exportingRef = React.useRef(false);
 
   React.useEffect(() => {
     setMobileTab(initialWorkspaceStep(searchParams));
@@ -85,7 +90,8 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
   }, []);
 
-  // 标签组键盘导航：←/→ 与 Home/End 在按钮间移动焦点（WAI-ARIA Tabs 模式）。
+  // 标签组键盘导航：←/→ 与 Home/End 移动焦点并同时激活对应标签（WAI-ARIA Tabs 自动激活模式）。
+  // 因为 tabIndex 由激活态派生，激活后 roving tabindex 会随 aria-selected 一起更新。
   const onTabsKeyDown = React.useCallback((
     event: React.KeyboardEvent<HTMLDivElement>,
     buttons: Array<{ key: string; enabled: boolean }>,
@@ -95,6 +101,8 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
     const targets = Array.from((event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('button[role="tab"]'))
       .filter((button) => !button.disabled);
     if (!targets.length) return;
+    // 与 targets（已过滤禁用按钮）按相同条件对齐，避免禁用项导致 key 错位
+    const enabledButtons = buttons.filter((button) => button.enabled);
     const current = targets.indexOf(document.activeElement as HTMLButtonElement);
     const last = targets.length - 1;
     let next = -1;
@@ -103,9 +111,32 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
     else if (event.key === 'ArrowRight') next = current === -1 ? 0 : current === last ? 0 : current + 1;
     else next = current === -1 ? last : current === 0 ? last : current - 1;
     event.preventDefault();
-    const target = targets[next];
-    const item = buttons[next];
-    if (item?.enabled) target.focus();
+    const item = enabledButtons[next];
+    if (!item) return;
+    targets[next].focus();
+    onSelect(item.key);
+  }, []);
+
+  // 联网配图：在「当前激活语言」编辑器的光标处插入图片 + 图注段落。
+  // 编辑器不可用（已卸载/已销毁）时返回 false，由配图面板降级为文末追加。
+  const insertImageAtCursor = React.useCallback((image: CursorImageInsert): boolean => {
+    const editor = editorInstanceRef.current;
+    if (!editor || editor.isDestroyed) return false;
+    editor.chain().focus().insertContent([
+      {
+        type: 'image',
+        attrs: {
+          src: image.dataUrl,
+          alt: image.alt,
+          sourceUrl: image.sourceUrl || null,
+          sourceLabel: image.sourceLabel || null,
+          imageLicense: image.license || null,
+          creator: image.creator || null,
+        },
+      },
+      ...(image.caption ? [{ type: 'paragraph', content: [{ type: 'text', text: image.caption }] }] : []),
+    ]).run();
+    return true;
   }, []);
 
   React.useEffect(() => {
@@ -277,6 +308,9 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
     setBatchProgress(null);
     const sourceBrief = briefOverride ?? article.brief;
     const briefSnapshot: Brief = { ...sourceBrief, platforms: [...sourceBrief.platforms] };
+    // 用户在能力市场对该 Agent 定制的写作指令随请求发给服务端（服务端只认内置静态表）；
+    // 自定义 Agent 服务端查不到，directive 也随请求直传
+    const directive = getAgentOverride(briefSnapshot.agentId)?.directive ?? getCustomAgent(briefSnapshot.agentId)?.directive;
     const aiSnapshot = loadAiConfig();
     const controller = new AbortController();
     generationController.current = controller;
@@ -302,6 +336,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
           material: briefSnapshot.material,
           ai: aiSnapshot,
           config: { seriesTitle: loadConfig().seriesTitle },
+          ...(directive ? { directive } : {}),
         }),
       });
       if (!res.ok) {
@@ -466,6 +501,9 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
   };
 
   const onExportZip = async () => {
+    // 防连点重复导出（按钮在 PlatformTabs 内，这里用 ref 同步拦截，不等重渲染）
+    if (exportingRef.current) return;
+    exportingRef.current = true;
     try {
       const cfg = loadConfig();
       // 收集文章内嵌图（blob → dataURL），随导出请求打包进 ZIP
@@ -487,6 +525,8 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
       downloadBlob(blob, `${slug(article.title)}.zip`);
     } catch (e) {
       showError((e as Error).message || '导出失败');
+    } finally {
+      exportingRef.current = false;
     }
   };
 
@@ -686,7 +726,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
     }
   };
 
-  const briefPanel = article.brief.agentId && resolveAgent(article.brief.agentId) ? (
+  const briefPanel = article.brief.agentId && (resolveAgent(article.brief.agentId) ?? getCustomAgent(article.brief.agentId)) ? (
     <AgentCompose brief={article.brief} onChange={onBrief} onGenerate={onGenerate} onImportMaterial={onImportMaterial} onError={showError} generating={generating} generationProgress={generationProgress} onCancelGeneration={onCancelGeneration} />
   ) : (
     <BriefPanel brief={article.brief} onChange={onBrief} onGenerate={onGenerate} onImportMaterial={onImportMaterial} onError={showError} generating={generating} generationProgress={generationProgress} onCancelGeneration={onCancelGeneration} />
@@ -766,23 +806,28 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
         )}
       </div>
       <div className="flex-1 min-h-0">
-        {editorView === 'images' ? (
+        {editorView === 'images' && (
           <ImageSearchPanel
             sourceUrl={firstHttpUrl(article.brief.material)}
             initialQuery={renderedTitle}
             content={selectedContent}
             onChange={updateSelectedContent}
             onClose={() => setEditorView('content')}
+            onInsertAtCursor={insertImageAtCursor}
           />
-        ) : (
+        )}
+        {/* 配图面板打开时编辑器保持挂载（仅隐藏），这样「插入」能落在当前光标处，
+            且光标位置不会因卸载重建而丢失。 */}
+        <div className={editorView === 'images' ? 'hidden' : 'h-full'}>
           <Editor
             key={article.id}
             html={selectedContent}
             onChange={updateSelectedContent}
             onFindImages={() => setEditorView('images')}
+            editorRef={editorInstanceRef}
             placeholder={language === 'zh' ? '在这里编辑中文稿。' : '英文版会在生成双语稿后出现，也可以直接在这里编写。'}
           />
-        )}
+        </div>
       </div>
     </>
   );

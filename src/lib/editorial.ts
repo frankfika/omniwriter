@@ -55,7 +55,15 @@ export function validateMarkdown(md: string): ValidationIssue[] {
   if (h1Count === 0) issues.push({ severity: 'high', message: '缺少 h1 标题' });
   if (h1Count > 1) issues.push({ severity: 'high', message: `有 ${h1Count} 个 h1，应仅保留一个` });
 
-  const imgs = [...md.matchAll(/!\[.*?\]\((.*?)\)/g)].map((m) => m[1]);
+  // 同时识别 Markdown 图片和编辑器 HTML 的 <img>（article.content 是 HTML，只看 md 语法会漏检）。
+  // data:/blob: 内嵌图没有文件名可查（导出时会按阅读顺序自动重命名为 01_img.ext），不触发命名警告。
+  const imgs = [
+    ...[...md.matchAll(/!\[.*?\]\((.*?)\)/g)].map((m) => ({ src: m[1], at: m.index ?? 0 })),
+    ...[...md.matchAll(/<img\b[^>]*?\bsrc="([^"]*)"/gi)].map((m) => ({ src: m[1], at: m.index ?? 0 })),
+  ]
+    .sort((a, b) => a.at - b.at)
+    .map((m) => m.src)
+    .filter((src) => !/^(data|blob):/i.test(src));
   imgs.forEach((src, i) => {
     const name = src.split('/').pop() ?? src;
     const ok = /^\d{2}[_-]/.test(name);

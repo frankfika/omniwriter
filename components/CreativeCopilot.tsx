@@ -120,7 +120,8 @@ export function CreativeCopilot({
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
+              // isComposing：中文输入法选词中的 Enter 不提交
+              if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
                 event.preventDefault();
                 void submit();
               }

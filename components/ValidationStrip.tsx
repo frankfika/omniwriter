@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { AlertTriangle, AlertOctagon, Info } from 'lucide-react';
-import { validateMarkdown, type ValidationIssue } from '@/src/lib/editorial';
+import { validateMarkdown } from '@/src/lib/editorial';
 import { cn } from './ui/cn';
 
 export function ValidationStrip({ markdown, title }: { markdown: string; title?: string }) {

@@ -77,6 +77,11 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
     setError(null);
     try {
       const sources = urls.length ? await fetchMaterialSources(urls) : [];
+      const failedUrls = sources.filter((source) => !source.text).map((source) => source.url);
+      // 用户给了链接但全部读取失败：不能拿着「未读取正文」占位符让 AI 瞎写，直接中止
+      if (urls.length > 0 && sources.length > 0 && failedUrls.length === sources.length) {
+        throw new Error('所有链接都读取失败，请检查链接是否需要登录或已失效，然后重试');
+      }
       const agentId = selectedAgentId ?? inferAgentId(input, urls);
       const agent = AGENTS.find((item) => item.id === agentId) ?? AGENTS[0];
       const requestedPlatforms = inferPlatformsFromInstruction(input);
@@ -85,7 +90,7 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
         ...(requestedPlatforms.length > 0 ? { platforms: requestedPlatforms } : {}),
         bilingual: /中英|双语|英文版|English/i.test(input),
         ...(effectiveVoice ? { voice: effectiveVoice } : {}),
-        ...(selectedTemplate ? { templateId: selectedTemplate.id } : {}),
+        templateId: selectedTemplate?.id,
       });
       const article = create(brief);
       useArticleStore.getState().update(article.id, {
@@ -94,7 +99,7 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
           {
             id: crypto.randomUUID(),
             role: 'assistant',
-            content: `我会按「${agent.name}」处理${brief.platforms.length ? `，并准备 ${brief.platforms.length} 个平台版本` : ''}。生成后可以继续直接告诉我怎么改。`,
+            content: `我会按「${agent.name}」处理${brief.platforms.length ? `，并准备 ${brief.platforms.length} 个平台版本` : ''}。生成后可以继续直接告诉我怎么改。${failedUrls.length ? `\n\n注意：以下链接读取失败，相关内容未纳入素材：\n${failedUrls.join('\n')}` : ''}`,
             createdAt: Date.now(),
           },
         ],

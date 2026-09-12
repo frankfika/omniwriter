@@ -2,12 +2,7 @@
 // 不依赖 Node-only 包（无 JSZip）。ZIP 打包走 src/lib/export-zip.ts（服务端）。
 import { resolveWechatTemplate } from './templates';
 
-export const WECHAT_INLINE_CSS = resolveWechatTemplate().styles.css;
-
-// 行内样式映射（与 WECHAT_INLINE_CSS 视觉一致）。
 // 公众号编辑器会剥离 <style>，所以复制/导出时每个元素必须自带 style 属性。
-export const INLINE_STYLES: Record<string, string> = resolveWechatTemplate().styles.elements;
-
 export interface BuildOptions {
   title: string;
   eyebrow?: string;
@@ -29,14 +24,39 @@ function escapeText(s: string) {
   return s.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 export function decodeHtml(s: string) {
+  // &amp; 必须最后解码，否则 &amp;lt;（用户正文里的字面 &lt;）会被二次解码成 <
   return s
-    .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&#x27;/gi, "'")
-    .replace(/&nbsp;/g, ' ');
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&');
+}
+
+// 解析标签属性（容忍属性任意顺序、单/双引号；属性值做实体解码）
+function parseAttrs(tag: string): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  const body = tag.replace(/^<\/?[\w-]+/, ''); // 去掉 <img 前缀，避免把标签名当属性
+  for (const m of body.matchAll(/([\w-]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g)) {
+    attrs[m[1].toLowerCase()] = decodeHtml(m[2] ?? m[3] ?? m[4] ?? '');
+  }
+  return attrs;
+}
+
+// 图片归因（来源/许可/作者/图注）序列化为 markdown 侧的 HTML 注释，
+// 使 AI 改稿往返（htmlToMarkdown → markdownToInlineHtml）后仍能恢复到 figure 属性上。
+function imageMetaComment(attrs: Record<string, string>, caption: string): string {
+  const meta: Record<string, string> = {};
+  if (attrs['data-source-url']) meta.sourceUrl = attrs['data-source-url'];
+  if (attrs['data-source-label']) meta.sourceLabel = attrs['data-source-label'];
+  if (attrs['data-image-license']) meta.license = attrs['data-image-license'];
+  if (attrs['data-creator']) meta.creator = attrs['data-creator'];
+  if (caption) meta.caption = caption;
+  if (Object.keys(meta).length === 0) return '';
+  // `>` 会提前终结注释（-->），统一转义为 JSON 的 >，JSON.parse 时还原
+  return `<!-- omni:image ${JSON.stringify(meta).replace(/>/g, '\\u003e')} -->\n`;
 }
 
 // 输入是否已经是 HTML（Tiptap 输出等）→ 直接走直通分支，避免二次 markdown 化
@@ -151,9 +171,27 @@ function mdToHtml(md: string): string {
     return `\u0000CODE${codeSpans.length - 1}\u0000`;
   });
 
-  // 图片
-  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_m, alt, src) =>
-    `<figure><img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}"/><figcaption>${escapeText(alt)}</figcaption></figure>`);
+  // 图片（可选前置 <!-- omni:image {...} --> 归因注释，见 imageMetaComment）
+  html = html.replace(/(?:<!--\s*omni:image\s+([\s\S]*?)\s*-->\s*)?!\[([^\]]*)\]\(([^)]+)\)/g, (_m, metaJson, alt, src) => {
+    let extra = '';
+    let caption = alt;
+    if (metaJson) {
+      try {
+        const meta = JSON.parse(metaJson) as Record<string, unknown>;
+        const attr = (key: string, name: string) => {
+          const v = meta[key];
+          if (typeof v === 'string' && v) extra += ` ${name}="${escapeAttr(v)}"`;
+        };
+        attr('sourceUrl', 'data-source-url');
+        attr('sourceLabel', 'data-source-label');
+        attr('license', 'data-image-license');
+        attr('creator', 'data-creator');
+        // 有图注时保留原 figcaption 文本，不用 alt 覆盖
+        if (typeof meta.caption === 'string' && meta.caption) caption = meta.caption;
+      } catch { /* 元数据损坏时按普通图片处理 */ }
+    }
+    return `<figure><img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}"${extra}/><figcaption>${escapeText(caption)}</figcaption></figure>`;
+  });
   // 链接（href 转义，防属性注入）
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, text, href) =>
     `<a href="${escapeAttr(href)}">${escapeText(text)}</a>`);
@@ -329,13 +367,21 @@ export function htmlToMarkdown(html: string): string {
   let s = html;
   // 代码块
   s = s.replace(/<pre><code[^>]*>([\s\S]*?)<\/code><\/pre>/gi, (_m, c) => `\n\`\`\`\n${decodeHtml(c).replace(/\n+$/, '')}\n\`\`\`\n\n`);
-  // 图片（figure 包裹优先；裸 <img> 兜底）
+  // 图片（figure 包裹优先；裸 <img> 兜底。属性任意顺序、alt 可选——无 alt 降级为 ![](src)，不许丢图）
   s = s.replace(/<figure[^>]*>([\s\S]*?)<\/figure>/gi, (_m, fig) => {
-    const img = fig.match(/<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"[^>]*\/?>/i);
-    if (img) return `![${img[2] || '图'}](${img[1]})\n\n`;
-    return `${decode(fig)}\n\n`;
+    const imgTag = fig.match(/<img\b[^>]*\/?>/i);
+    if (!imgTag) return `${decode(fig)}\n\n`;
+    const attrs = parseAttrs(imgTag[0]);
+    if (!attrs.src) return `${decode(fig)}\n\n`;
+    const captionTag = fig.match(/<figcaption[^>]*>([\s\S]*?)<\/figcaption>/i);
+    const caption = captionTag ? decode(captionTag[1]) : '';
+    // 图注与 alt 相同（mdToHtml 默认行为可还原）时不写注释，保持 markdown 干净
+    return `${imageMetaComment(attrs, caption === (attrs.alt ?? '') ? '' : caption)}![${attrs.alt ?? ''}](${attrs.src})\n\n`;
   });
-  s = s.replace(/<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"[^>]*\/?>/gi, (_m, src, alt) => `![${alt || '图'}](${src})`);
+  s = s.replace(/<img\b[^>]*\/?>/gi, (tag) => {
+    const attrs = parseAttrs(tag);
+    return attrs.src ? `![${attrs.alt ?? ''}](${attrs.src})` : '';
+  });
   // 标题
   s = s.replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, (_m, t) => `# ${decode(t)}\n\n`);
   s = s.replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, (_m, t) => `## ${decode(t)}\n\n`);
@@ -364,7 +410,7 @@ export function htmlToMarkdown(html: string): string {
   s = s.replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, (_m, t) => `${decode(t)}\n\n`);
   s = s.replace(/<br\s*\/?>/gi, '\n');
   s = s.replace(/<div[^>]*>([\s\S]*?)<\/div>/gi, (_m, t) => `${decode(t)}\n\n`);
-  s = s.replace(/<[^>]+>/g, '');
+  s = s.replace(/<[^>]+>/g, (tag) => (tag.startsWith('<!--') ? tag : '')); // 保留 omni:image 归因注释
   s = s.replace(/\n{3,}/g, '\n\n').trim();
   return s ? `${s}\n` : '';
 }
