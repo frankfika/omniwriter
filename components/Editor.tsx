@@ -2,12 +2,13 @@
 
 import * as React from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
+import type { Editor as TiptapEditor } from '@tiptap/react';
 import type { EditorView } from '@tiptap/pm/view';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
 import CharacterCount from '@tiptap/extension-character-count';
-import { Bold, Italic, Image as ImageIcon, Heading1, Heading2, List, Quote, Code, Images } from 'lucide-react';
+import { Bold, Italic, Heading1, Heading2, List, Quote, Code, Images } from 'lucide-react';
 import { cn } from './ui/cn';
 import { downscaleImage, blobToDataUrl } from '@/src/lib/images';
 
@@ -43,12 +44,14 @@ export function Editor({
   html,
   onChange,
   onFindImages,
+  editorRef,
   placeholder = '从这里开始写——或者在左侧创作指令面板里点「生成」。',
   className,
 }: {
   html: string;
   onChange: (html: string) => void;
   onFindImages?: () => void;
+  editorRef?: React.MutableRefObject<TiptapEditor | null>;
   placeholder?: string;
   className?: string;
 }) {
@@ -112,29 +115,10 @@ export function Editor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [html, editor]);
 
-  // 插入图片：仅支持「本地文件 / 合法图片 URL」两种来源。
-  // 移除 window.prompt 任意 URL 输入——它既造成 iOS 键盘/IME 问题（UX），
-  // 也会把 javascript:、data:text/html 等危险 scheme 持久化进文章（XSS）。
-  // 现在只弹一次「图片链接（可选）」，空则走文件选择；URL 严格校验 scheme。
-  const insertImage = React.useCallback(() => {
-    if (!editor) return;
-    const src = (window.prompt('图片链接（https:// 或 data:image/...，留空则选择本地文件）') ?? '').trim();
-    if (!src) {
-      openFilePicker(editor.view);
-      return;
-    }
-    if (!/^(https?:\/\/|data:image\/)/i.test(src)) {
-      window.alert('只支持 http(s) 图片链接或 data:image 图片数据');
-      return;
-    }
-    const caption = '';
-    const alt = caption || '图片';
-    const { state } = editor;
-    const pos = state.selection.from;
-    const node = state.schema.nodes.image.create({ src, alt });
-    let tr = state.tr.replaceSelectionWith(node);
-    editor.view.dispatch(tr);
-  }, [editor]);
+  // 把编辑器实例暴露给父组件（如联网配图面板在光标处插图）
+  React.useEffect(() => {
+    if (editorRef) editorRef.current = editor;
+  }, [editor, editorRef]);
 
   if (!editor) return <div className={cn('text-ink-muted text-sm p-8', className)}>加载编辑器…</div>;
 
@@ -153,7 +137,9 @@ export function Editor({
           <ToolbarBtn on={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()} title="无序列表" aria-label="列表"><List size={16}/></ToolbarBtn>
           <ToolbarBtn on={editor.isActive('code')} onClick={() => editor.chain().focus().toggleCode().run()} title="行内代码" aria-label="代码"><Code size={16}/></ToolbarBtn>
           <Sep/>
-          {onFindImages ? (
+          {/* 插入图片只保留「联网配图」入口；本地图片走粘贴/拖放（insertImageFile）。
+              之前的 window.prompt 任意 URL 死代码已删除（iOS 键盘问题 + 危险 scheme 持久化的 XSS 风险）。 */}
+          {onFindImages && (
             <button
               type="button"
               onClick={onFindImages}
@@ -162,8 +148,6 @@ export function Editor({
             >
               <Images size={16}/> 配图
             </button>
-          ) : (
-            <ToolbarBtn onClick={insertImage} title="插入图片" aria-label="插入图片"><ImageIcon size={16}/></ToolbarBtn>
           )}
           <div className="ml-auto shrink-0 text-[11px] text-ink-muted tabular-nums">{chars} 字</div>
         </div>
@@ -202,21 +186,13 @@ async function insertImageFile(
   } else {
     tr.replaceSelectionWith(node);
   }
-  // 光标会落在图片节点上（NodeSelection），显式在图片之后插入图注，避免覆盖图片
-  if (caption) tr.insertText(`\n${caption}\n`, Math.min(pos + node.nodeSize, tr.doc.content.size));
+  // 光标会落在图片节点上（NodeSelection），显式在图片之后插入一个图注段落节点，
+  // 避免覆盖图片（文本节点不能含换行，insertText('\n…') 不会产生新段落）。
+  if (caption) {
+    const captionPos = Math.min(tr.mapping.map(pos, 1), tr.doc.content.size);
+    tr.insert(captionPos, state.schema.nodes.paragraph.create({}, state.schema.text(caption)));
+  }
   view.dispatch(tr);
-}
-
-function openFilePicker(view: EditorView) {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'image/*';
-  input.onchange = () => {
-    const f = input.files?.[0];
-    if (!f) return;
-    void insertImageFile(view, f, null);
-  };
-  input.click();
 }
 
 function ToolbarBtn({ on, onClick, children, ...rest }: { on?: boolean; onClick: () => void; children: React.ReactNode; [k: string]: unknown }) {

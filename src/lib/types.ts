@@ -36,6 +36,7 @@ export interface Brief {
   cta?: string;
   agentId?: string; // 来自 Agent 市场；缺省为手动模式（旧文章向后兼容）
   scene?: string;   // 选中的发布场景 id
+  templateId?: string; // 用户选择的排版模板；缺省时由 store 回退到全局默认
 }
 
 export interface Article {
@@ -66,6 +67,18 @@ export interface CreatorMessage {
   agentId?: CreatorAgentId;
 }
 
+// 用户在能力市场对单个 Agent 的定制：directive 会随生成请求发给服务端，
+// defaults 在建稿时 merge 进 Brief（只存与内置预设不同的字段）。
+export interface AgentOverride {
+  directive?: string;
+  defaults?: {
+    voice?: Voice;
+    length?: Brief['length'];
+    platforms?: PlatformId[];
+    bilingual?: boolean;
+  };
+}
+
 export interface CreatorConfig {
   defaultPlatforms: PlatformId[];
   bilingual: boolean;
@@ -76,4 +89,5 @@ export interface CreatorConfig {
   newsEyebrow: string;
   defaultTemplateId: string;
   marketStyleId?: Voice; // 用户在能力市场主动选择的跨 Agent 风格；缺省时由 Agent 自己决定
+  agentOverrides?: Record<string, AgentOverride>; // 按 Agent id 存放的用户定制
 }

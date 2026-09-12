@@ -9,6 +9,7 @@ import { cn } from './ui/cn';
 import { AiSetupGuide } from './AiSetupGuide';
 import { useAiStatus } from '@/src/lib/use-ai-status';
 import { resolveAgent, SCENES, allPlatforms } from '@/src/lib/agents';
+import { getCustomAgent } from '@/src/lib/custom-agents';
 import { PLATFORMS } from '@/src/lib/platforms';
 import { resolveWritingStyle, WRITING_STYLES } from '@/src/lib/styles';
 import type { Brief, PlatformId, Voice } from '@/src/lib/types';
@@ -42,16 +43,18 @@ export function AgentCompose({ brief, onChange, onGenerate, onImportMaterial, on
     return () => window.cancelAnimationFrame(frame);
   }, [generating]);
 
-  const agent = resolveAgent(brief.agentId);
+  const agent = resolveAgent(brief.agentId) ?? getCustomAgent(brief.agentId);
 
   // Hooks 恒定调用后再分支
   const update = (patch: Partial<Brief>) => onChange({ ...brief, ...patch });
 
-  if (!agent) return null;
+  // Agent 已被删除（如自定义 Agent）：面板照常可用，只提示指令失效
+  const agentMissing = !agent && Boolean(brief.agentId);
+  if (!agent && !brief.agentId) return null;
 
   const selectedScene = SCENES.find((s) => s.id === brief.scene);
   const selectedStyle = resolveWritingStyle(brief.voice);
-  const isCopyOnly = agent.id === 'copy-format' || brief.materialType === 'copy';
+  const isCopyOnly = agent?.id === 'copy-format' || brief.materialType === 'copy';
   const materialUrls = extractHttpUrls(brief.material);
   const canFetchUrls = materialUrls.length > 0 && !brief.material.includes('## 来源 1');
 
@@ -91,11 +94,16 @@ export function AgentCompose({ brief, onChange, onGenerate, onImportMaterial, on
   return (
     <div className="flex flex-col h-full overflow-y-auto p-5 gap-4 bg-white">
       {/* 当前模式 */}
+      {agentMissing && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs leading-relaxed text-amber-800">
+          关联的 Agent 已被删除，生成时不会带它的定制指令；可回市场另选流程或继续按默认方式生成。
+        </div>
+      )}
       <div className="rounded-xl border border-ink-line p-3.5 flex items-center gap-3 bg-ink-panel/30">
-        <div className="text-xl leading-none">{agent.emoji}</div>
+        <div className="text-xl leading-none">{agent?.emoji ?? '✍️'}</div>
         <div className="min-w-0">
-          <div className="text-sm font-semibold">{agent.name}</div>
-          <div className="text-[11px] text-ink-muted mt-0.5 truncate">{agent.tagline}</div>
+          <div className="text-sm font-semibold">{agent?.name ?? '自由写作'}</div>
+          <div className="text-[11px] text-ink-muted mt-0.5 truncate">{agent?.tagline ?? '不绑定特定流程'}</div>
         </div>
       </div>
 
@@ -107,7 +115,7 @@ export function AgentCompose({ brief, onChange, onGenerate, onImportMaterial, on
             value={brief.material}
             onChange={(e) => update({ material: e.target.value })}
             rows={5}
-            placeholder={agent.inputHint}
+            placeholder={agent?.inputHint ?? '贴入正文、链接或 GitHub 仓库…'}
             className="flex-1"
           />
           {canFetchUrls && (
@@ -153,7 +161,7 @@ export function AgentCompose({ brief, onChange, onGenerate, onImportMaterial, on
                   {s.label}
                 </Chip>
               ))}
-              <Chip active={!selectedScene} onClick={() => update({ scene: undefined, platforms: agent.defaults.platforms ? [...agent.defaults.platforms] : [] })} title="按当前模式默认平台">
+              <Chip active={!selectedScene} onClick={() => update({ scene: undefined, platforms: agent?.defaults.platforms ? [...agent.defaults.platforms] : [] })} title="按当前模式默认平台">
                 默认
               </Chip>
             </div>

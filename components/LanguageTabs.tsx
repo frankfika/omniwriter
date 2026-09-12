@@ -15,7 +15,7 @@ export function LanguageTabs({
   hasEnglish: boolean;
   compact?: boolean;
 }) {
-  // 标签组键盘导航：←/→ 在中文/English 之间移动焦点（WAI-ARIA Tabs 模式）。
+  // 标签组键盘导航：←/→ 移动焦点并直接激活对应 tab（WAI-ARIA Tabs 自动激活模式）。
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft' && event.key !== 'Home' && event.key !== 'End') return;
     const buttons = Array.from((event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('button[role="tab"]'));
@@ -29,6 +29,7 @@ export function LanguageTabs({
     else next = current === -1 ? last : current === 0 ? last : current - 1;
     event.preventDefault();
     buttons[next].focus();
+    buttons[next].click();
   };
 
   return (

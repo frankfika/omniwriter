@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { FileText, PenLine } from 'lucide-react';
 import { AppShell } from '@/components/AppShell';
 import { QuickComposer } from '@/components/QuickComposer';
@@ -15,6 +16,7 @@ export default function HomePage() {
   const articles = useArticleStore((state) => state.articles);
   const create = useArticleStore((state) => state.create);
   const { aiReady } = useAiStatus();
+  const router = useRouter();
 
   React.useEffect(() => { hydrate(); }, [hydrate]);
 
@@ -29,7 +31,7 @@ export default function HomePage() {
       platforms: config.defaultPlatforms,
       bilingual: config.bilingual,
     } as Brief);
-    location.assign(`/article/${article.id}?write=1`);
+    router.push(`/article/${article.id}?write=1`);
   };
 
   return (
@@ -65,7 +67,7 @@ export default function HomePage() {
               <div className="rounded-2xl border border-dashed border-indigo-200 bg-white/45 px-5 py-8 text-center text-xs text-ink-muted">第一篇内容会出现在这里。</div>
             ) : (
               <ul className="grid gap-2 sm:grid-cols-2">
-                {articles.slice(0, 6).map((article) => (
+                {[...articles].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 6).map((article) => (
                   <li key={article.id}>
                     <Link href={`/article/${article.id}`} className="flex items-center gap-3 rounded-xl border border-white/80 bg-white/55 px-3 py-3 transition-colors hover:border-indigo-200 hover:bg-white">
                       <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"><FileText size={14}/></span>

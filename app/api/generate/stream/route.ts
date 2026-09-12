@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
     material?: string;
     ai?: AiLike;
     config?: { seriesTitle?: string };
+    directive?: string; // 客户端对 Agent 写作指令的定制；缺省回退内置预设
   };
   try {
     body = await req.json();
@@ -64,7 +65,11 @@ export async function POST(req: NextRequest) {
           let firstChunk = true;
           let lastSentChars = 0;
           let lastSentAt = 0;
-          const directive = resolveAgent(brief.agentId)?.directive;
+          // 用户定制的 directive 优先（截断防滥用），否则回退 Agent 内置预设
+          const custom = typeof body.directive === 'string' && body.directive.trim()
+            ? body.directive.slice(0, 4000)
+            : undefined;
+          const directive = custom ?? resolveAgent(brief.agentId)?.directive;
           const md = await generateMasterStream(brief, source, directive, body.ai, {
             seriesTitle: body.config?.seriesTitle,
             signal: req.signal,
@@ -96,6 +101,12 @@ export async function POST(req: NextRequest) {
                 });
               }
             },
+            onBilingual: () => send({
+              type: 'stage', requestId, stage: 'translating',
+              label: '中文稿已生成，正在补全英文版',
+              detail: '双语稿需要追加翻译调用，比纯中文稿多等一会',
+              at: Date.now(),
+            }),
           });
 
           // 冲刷末段：即使末尾增量不足阈值，也要把最终字数推给客户端。

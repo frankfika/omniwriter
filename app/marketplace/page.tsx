@@ -13,10 +13,13 @@ import {
   LayoutTemplate,
   Link as LinkIcon,
   Palette,
+  Plus,
   Search,
   Send,
+  Settings2,
   ShieldCheck,
   Sparkles,
+  Trash2,
   WandSparkles,
   ArrowRight,
 } from 'lucide-react';
@@ -31,12 +34,16 @@ import type { CreatorPlugin } from '@/src/lib/plugins';
 import { PLATFORMS } from '@/src/lib/platforms';
 import { resolveWritingStyle, STYLE_GROUP_LABELS, WRITING_STYLES } from '@/src/lib/styles';
 import type { WritingStylePreset } from '@/src/lib/styles';
-import { loadConfig, saveConfig } from '@/src/lib/config';
-import type { Voice } from '@/src/lib/types';
+import { loadConfig, saveConfig, getAgentOverride, clearAgentOverride } from '@/src/lib/config';
+import { listCustomAgents, mergeCustomAgents, removeCustomAgent } from '@/src/lib/custom-agents';
+import type { CustomAgent } from '@/src/lib/custom-agents';
+import type { AgentOverride, Voice } from '@/src/lib/types';
 import { cn } from '@/components/ui/cn';
 import { WECHAT_TEMPLATES } from '@/src/lib/templates';
 import type { WechatTemplate } from '@/src/lib/templates';
 import { TemplateMiniature } from '@/components/TemplateMiniature';
+import { AgentConfigDialog } from '@/components/AgentConfigDialog';
+import { AgentStudio } from '@/components/AgentStudio';
 
 type MarketTab = 'agents' | 'styles' | 'templates' | 'plugins';
 
@@ -60,11 +67,17 @@ export default function MarketplacePage() {
   const [defaultStyle, setDefaultStyle] = React.useState<Voice | null>(null);
   const [defaultTemplate, setDefaultTemplate] = React.useState('graphite');
   const [notice, setNotice] = React.useState<string | null>(null);
+  const [overrides, setOverrides] = React.useState<Record<string, AgentOverride>>({});
+  const [configuring, setConfiguring] = React.useState<WriterAgent | null>(null);
+  const [customAgents, setCustomAgents] = React.useState<CustomAgent[]>([]);
+  const [studioOpen, setStudioOpen] = React.useState(false);
 
   React.useEffect(() => {
     const config = loadConfig();
     setDefaultStyle(config.marketStyleId ?? null);
     setDefaultTemplate(config.defaultTemplateId);
+    setOverrides(config.agentOverrides ?? {});
+    setCustomAgents(listCustomAgents());
   }, []);
 
   React.useEffect(() => {
@@ -75,8 +88,10 @@ export default function MarketplacePage() {
   }, []);
 
   const useAgent = (agent: WriterAgent) => {
-    const effectiveVoice = defaultStyle ?? agent.defaults.voice ?? 'relaxed';
-    const article = create(mergeBrief(agent, undefined, { voice: effectiveVoice }));
+    const override = getAgentOverride(agent.id);
+    const effectiveVoice = defaultStyle ?? override?.defaults?.voice ?? agent.defaults.voice ?? 'relaxed';
+    // 用户定制的默认选项随 mergeBrief 的 custom 进入新文章的 Brief
+    const article = create(mergeBrief(agent, undefined, { ...override?.defaults, voice: effectiveVoice }));
     useArticleStore.getState().update(article.id, {
       conversation: [{
         id: crypto.randomUUID(),
@@ -88,8 +103,28 @@ export default function MarketplacePage() {
     router.push(`/article/${article.id}?step=brief&from=market`);
   };
 
+  const onConfigured = (agent: WriterAgent, saved: boolean) => {
+    setConfiguring(null);
+    setOverrides(loadConfig().agentOverrides ?? {});
+    if (saved) setNotice(`「${agent.name}」的配置已更新，之后用此流程创作会按你的设置来。`);
+  };
+
+  const onStudioClose = (saved: CustomAgent | null) => {
+    setStudioOpen(false);
+    setCustomAgents(listCustomAgents());
+    if (saved) setNotice(`「${saved.name}」已保存到能力市场，和内置 Agent 一样可用来创作。`);
+  };
+
+  const onDeleteCustom = (agent: CustomAgent) => {
+    if (!window.confirm(`删除自定义 Agent「${agent.name}」？此操作不可撤销。`)) return;
+    removeCustomAgent(agent.id);
+    clearAgentOverride(agent.id); // 连同该 Agent 的配置 override 一起清掉，不留孤儿数据
+    setCustomAgents(listCustomAgents());
+    setNotice(`已删除「${agent.name}」。`);
+  };
+
   const normalized = query.trim().toLowerCase();
-  const agents = AGENTS.filter((agent) =>
+  const agents = mergeCustomAgents(AGENTS, customAgents).filter((agent) =>
     !normalized || `${agent.name} ${agent.tagline} ${agent.description}`.toLowerCase().includes(normalized),
   );
   const plugins = CREATOR_PLUGINS.filter((plugin) =>
@@ -166,7 +201,7 @@ export default function MarketplacePage() {
           )}
 
           <div role="tablist" aria-label="能力类型" className="flex w-full sm:w-auto max-w-full overflow-x-auto rounded-lg border border-ink-line bg-white p-1 mb-3">
-            <MarketTabButton active={tab === 'agents'} onClick={() => setTab('agents')} icon={<Bot size={14}/>} label={`Agent · ${AGENTS.length}`}/>
+            <MarketTabButton active={tab === 'agents'} onClick={() => setTab('agents')} icon={<Bot size={14}/>} label={`Agent · ${AGENTS.length + customAgents.length}`}/>
             <MarketTabButton active={tab === 'styles'} onClick={() => setTab('styles')} icon={<Palette size={14}/>} label={`风格 · ${WRITING_STYLES.length}`}/>
             <MarketTabButton active={tab === 'templates'} onClick={() => setTab('templates')} icon={<LayoutTemplate size={14}/>} label={`模板 · ${WECHAT_TEMPLATES.length}`}/>
             <MarketTabButton active={tab === 'plugins'} onClick={() => setTab('plugins')} icon={<Blocks size={14}/>} label={`插件 · ${CREATOR_PLUGINS.length}`}/>
@@ -179,6 +214,10 @@ export default function MarketplacePage() {
 
           {tab === 'agents' ? (
             <div className="space-y-8">
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/50 px-4 py-3">
+                <p className="text-[12px] leading-relaxed text-ink-soft">没有合手的流程？喂几篇范文，孵化一个只属于你的写作 Agent。</p>
+                <Button size="sm" onClick={() => setStudioOpen(true)} className="shrink-0"><Plus size={13}/>创建 Agent</Button>
+              </div>
               {Object.entries(GROUP_LABELS).map(([group, label]) => {
                 const items = agents.filter((agent) => agent.group === group);
                 if (!items.length) return null;
@@ -189,7 +228,16 @@ export default function MarketplacePage() {
                       <span className="text-[11px] text-ink-muted">{items.length} 个创作流程</span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                      {items.map((agent) => <AgentMarketCard key={agent.id} agent={agent} onUse={() => useAgent(agent)}/>)}
+                      {items.map((agent) => (
+                        <AgentMarketCard
+                          key={agent.id}
+                          agent={agent}
+                          override={overrides[agent.id]}
+                          onUse={() => useAgent(agent)}
+                          onConfigure={() => setConfiguring(agent)}
+                          onDelete={agent.id.startsWith('custom-') ? () => onDeleteCustom(agent as CustomAgent) : undefined}
+                        />
+                      ))}
                     </div>
                   </section>
                 );
@@ -255,6 +303,8 @@ export default function MarketplacePage() {
           )}
         </div>
       </div>
+      {configuring && <AgentConfigDialog agent={configuring} onClose={(saved) => onConfigured(configuring, saved)}/>}
+      {studioOpen && <AgentStudio onClose={onStudioClose}/>}
     </AppShell>
   );
 }
@@ -310,8 +360,12 @@ function MarketTabButton({ active, onClick, icon, label }: { active: boolean; on
   );
 }
 
-function AgentMarketCard({ agent, onUse }: { agent: WriterAgent; onUse: () => void }) {
-  const writingStyle = resolveWritingStyle(agent.defaults.voice ?? 'relaxed');
+function AgentMarketCard({ agent, override, onUse, onConfigure, onDelete }: { agent: WriterAgent; override?: AgentOverride; onUse: () => void; onConfigure: () => void; onDelete?: () => void }) {
+  const isCustom = agent.id.startsWith('custom-');
+  const customized = Boolean(override && (override.directive !== undefined || Object.keys(override.defaults ?? {}).length > 0));
+  const effectiveVoice = override?.defaults?.voice ?? agent.defaults.voice ?? 'relaxed';
+  const effectivePlatforms = override?.defaults?.platforms ?? agent.defaults.platforms ?? [];
+  const writingStyle = resolveWritingStyle(effectiveVoice);
   return (
     <article className="group flex flex-col rounded-xl border border-ink-line bg-white p-4 hover:border-ink/70 hover:shadow-sm transition-all">
       <div className="flex items-start gap-3 mb-3">
@@ -320,25 +374,37 @@ function AgentMarketCard({ agent, onUse }: { agent: WriterAgent; onUse: () => vo
           <h3 className="text-sm font-semibold leading-snug">{agent.name}</h3>
           <p className="text-[11px] text-ink-muted mt-0.5">{agent.tagline}</p>
         </div>
-        <span className="ml-auto text-[10px] rounded-full border border-ink-line px-2 py-0.5 text-ink-muted">内置</span>
+        {isCustom
+          ? <span className="ml-auto text-[10px] rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700">自定义</span>
+          : customized
+            ? <span className="ml-auto text-[10px] rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700">已定制</span>
+            : <span className="ml-auto text-[10px] rounded-full border border-ink-line px-2 py-0.5 text-ink-muted">内置</span>}
       </div>
       <p className="text-[12.5px] text-ink-soft leading-relaxed mb-3">{agent.description}</p>
       <div className="flex flex-wrap gap-1 mb-4">
         <span className="rounded-full bg-ink text-white px-2 py-0.5 text-[10px]">{writingStyle.name}</span>
-        {(agent.defaults.platforms ?? []).slice(0, 4).map((platform) => (
+        {effectivePlatforms.slice(0, 4).map((platform) => (
           <span key={platform} className="rounded-full bg-ink-panel px-2 py-0.5 text-[10px] text-ink-soft">{PLATFORMS[platform].label}</span>
         ))}
-        {(agent.defaults.platforms?.length ?? 0) > 4 && <span className="rounded-full bg-ink-panel px-2 py-0.5 text-[10px] text-ink-muted">+{(agent.defaults.platforms?.length ?? 0) - 4}</span>}
+        {effectivePlatforms.length > 4 && <span className="rounded-full bg-ink-panel px-2 py-0.5 text-[10px] text-ink-muted">+{effectivePlatforms.length - 4}</span>}
       </div>
-      <div className="mb-4 flex flex-wrap items-center gap-1">
-        <span className="text-[10px] text-ink-muted mr-0.5">调用</span>
-        {agent.pluginIds.slice(0, 3).map((id) => CREATOR_PLUGIN_MAP[id]).filter(Boolean).map((plugin) => (
-          <span key={plugin.id} className="rounded-full border border-ink-line px-2 py-0.5 text-[10px] text-ink-soft">{plugin.name}</span>
-        ))}
-      </div>
-      <div className="mt-auto flex items-center justify-between pt-3 border-t border-ink-line">
-        <span className="text-[11px] text-ink-muted truncate pr-3">{agent.inputHint}</span>
-        <Button size="sm" onClick={onUse} className="shrink-0"><Sparkles size={13}/>用此流程创作</Button>
+      {agent.pluginIds.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-1">
+          <span className="text-[10px] text-ink-muted mr-0.5">调用</span>
+          {agent.pluginIds.slice(0, 3).map((id) => CREATOR_PLUGIN_MAP[id]).filter(Boolean).map((plugin) => (
+            <span key={plugin.id} className="rounded-full border border-ink-line px-2 py-0.5 text-[10px] text-ink-soft">{plugin.name}</span>
+          ))}
+        </div>
+      )}
+      <div className="mt-auto flex items-center justify-between gap-2 pt-3 border-t border-ink-line">
+        <span className="text-[11px] text-ink-muted truncate pr-1">{agent.inputHint}</span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {onDelete && (
+            <Button size="sm" variant="ghost" onClick={onDelete} aria-label={`删除 ${agent.name}`} title="删除这个自定义 Agent"><Trash2 size={13}/></Button>
+          )}
+          <Button size="sm" variant="ghost" onClick={onConfigure} aria-label={`配置 ${agent.name}`} title="配置提示词和默认选项"><Settings2 size={13}/><span className="hidden sm:inline">配置</span></Button>
+          <Button size="sm" onClick={onUse}><Sparkles size={13}/>用此流程创作</Button>
+        </div>
       </div>
     </article>
   );

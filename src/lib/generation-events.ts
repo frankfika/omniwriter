@@ -3,6 +3,9 @@ export type GenerationStage =
   | 'rules'
   | 'waiting'
   | 'streaming'
+  // 双语稿补译阶段：正文已流完，正在追加英文版补译调用。事件形状与普通 stage 事件一致，
+  // 老消费者不识别该 stage 时按未知 stage 透传/忽略即可，不会崩。
+  | 'translating'
   | 'checking'
   | 'done';
 

@@ -20,8 +20,9 @@ export function PreviewPane({ markdown, materialType, title = 'article', templat
   const template = resolveWechatTemplate(templateId);
 
   // 预览与「复制公众号正文」共用同一份：行内样式 + Eyebrow + 署名
+  // loadConfig 是同步 localStorage 读，放在 memo 外保证设置页改完配置回来能刷新
+  const cfg = loadConfig();
   const html = React.useMemo(() => {
-    const cfg = loadConfig();
     const configuredEyebrow = materialType === 'news' ? cfg.newsEyebrow : cfg.wechatEyebrow;
     const englishEyebrow = language === 'en' && containsCjk(configuredEyebrow) ? undefined : configuredEyebrow;
     const englishAuthor = language === 'en' && containsCjk(cfg.authorSignature) ? undefined : cfg.authorSignature;
@@ -31,7 +32,7 @@ export function PreviewPane({ markdown, materialType, title = 'article', templat
       title,
       templateId: template.id,
     });
-  }, [markdown, materialType, language, title, template.id]);
+  }, [markdown, materialType, language, title, template.id, cfg.newsEyebrow, cfg.wechatEyebrow, cfg.authorSignature]);
 
   const onCopy = async () => {
     const ok = await copyRichToClipboard(html, mdToPlainText(html));

@@ -2,9 +2,11 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { readFileSync } from 'node:fs';
+import { isIP } from 'node:net';
+import { isPrivateAddress } from './fetch';
 import type { Brief, PlatformId } from './types';
 import { EDITORIAL_RULES, FACT_CHECK_RULES, STYLE_GUIDE } from './editorial';
-import { PLATFORMS, PLATFORM_ORDER } from './platforms';
+import { PLATFORMS } from './platforms';
 import { resolveWritingStyle } from './styles';
 
 let client: Anthropic | null = null;
@@ -27,12 +29,36 @@ export function getClient(ai?: AiLike): Anthropic {
     );
   }
   const baseURL = useClientConfig
-    ? ai?.baseUrl?.trim() || 'https://api.minimaxi.com/anthropic'
+    ? assertAiBaseUrl(ai?.baseUrl?.trim() || 'https://api.minimaxi.com/anthropic')
     : process.env.ANTHROPIC_BASE_URL || 'https://api.minimaxi.com/anthropic';
   if (useEnv && client) return client;
   const c = new Anthropic({ apiKey, baseURL });
   if (useEnv) client = c;
   return c;
+}
+
+// 用户自填的 baseUrl 决定 SDK 把密钥发往哪个主机，必须挡住本机/内网字面量，
+// 否则设置页就成了 SSRF 口子。只校验用户在请求体里传的地址；.env.local 的
+// ANTHROPIC_BASE_URL 是部署者自己的配置（可能是局域网网关），不做限制。
+// 策略边界：SDK 自己解析 DNS 并发请求，这里 pin 不住解析结果，所以只挡 IP 字面量
+// 和明显内部主机名——「公网域名实际解析到内网」挡不住，自部署单用户场景接受这个上限；
+// 要封死需在 fetch 层换自定义 dispatcher（参见 src/lib/fetch.ts 的做法）。
+function assertAiBaseUrl(raw: string): string {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error('AI 接口地址（Base URL）不是合法 URL，请检查「设置 → AI 连接」。');
+  }
+  if (url.protocol !== 'https:') {
+    throw new Error('AI 接口地址必须使用 https，密钥不能以明文发送。');
+  }
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (isIP(hostname) ? isPrivateAddress(hostname)
+    : hostname === 'localhost' || hostname.endsWith('.local') || hostname.endsWith('.internal')) {
+    throw new Error('AI 接口地址不能指向本机或内网地址，请使用公网 https 地址（或自建公网代理）。');
+  }
+  return raw;
 }
 
 export const MODEL = process.env.ANTHROPIC_MODEL || 'MiniMax-M2.7';
@@ -91,6 +117,8 @@ export async function generateMasterStream(
     onPrepared?: () => void;
     onRequested?: () => void;
     onText?: (delta: string, snapshot: string) => void;
+    // 母稿正文已返回、但缺英文版需要追加补译调用时触发（仅双语稿），让进度 UI 能说明还在等什么。
+    onBilingual?: () => void;
   } = {},
 ): Promise<string> {
   const user = buildUserPrompt(brief, material, opts.seriesTitle);
@@ -110,11 +138,12 @@ export async function generateMasterStream(
   opts.onRequested?.();
   if (opts.onText) stream.on('text', opts.onText);
   const msg = await stream.finalMessage();
-  return ensureBilingualMaster(brief, extractText(msg), ai, opts.signal);
+  return ensureBilingualMaster(brief, extractText(msg), ai, opts.signal, opts.onBilingual);
 }
 
-async function ensureBilingualMaster(brief: Brief, draft: string, ai?: AiLike, signal?: AbortSignal): Promise<string> {
+async function ensureBilingualMaster(brief: Brief, draft: string, ai?: AiLike, signal?: AbortSignal, onBilingual?: () => void): Promise<string> {
   if (!brief.bilingual || /^##\s+English\s+Version\s*$/im.test(draft)) return draft;
+  onBilingual?.();
   let candidate = draft;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const msg = await getClient(ai).messages.create({
@@ -296,7 +325,15 @@ function clampPlatformText(value: string, maxChars: number): string {
   const suffix = hashtags.join(' ');
   const suffixLength = Array.from(suffix).length;
   const bodyBudget = Math.max(1, maxChars - suffixLength - (suffix ? 2 : 0));
-  let body = Array.from(text.replace(/(?:^|\s)#[^\s#]+/g, '').trim()).slice(0, bodyBudget).join('').trimEnd();
+  const stripped = Array.from(text.replace(/(?:^|\s)#[^\s#]+/g, '').trim());
+  let body = stripped.slice(0, bodyBudget).join('').trimEnd();
+  // 截断点落在无空白 token（URL、@提及等）中间时，退到最近的空白边界，
+  // 避免把半个链接静默写进草稿。
+  if (stripped.length > bodyBudget && body
+    && !/\s/.test(stripped[bodyBudget - 1]) && !/\s/.test(stripped[bodyBudget])) {
+    const lastWhitespace = body.search(/\s[^\s]*$/);
+    body = (lastWhitespace >= 0 ? body.slice(0, lastWhitespace) : '').trimEnd();
+  }
   const lastNaturalBreak = Math.max(body.lastIndexOf('\n'), body.lastIndexOf('。'), body.lastIndexOf('！'), body.lastIndexOf('？'));
   if (lastNaturalBreak >= Math.floor(bodyBudget * 0.65)) body = body.slice(0, lastNaturalBreak + 1).trimEnd();
   return `${body}${suffix ? `\n\n${suffix}` : ''}`.trim();

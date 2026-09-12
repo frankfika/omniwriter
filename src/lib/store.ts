@@ -144,7 +144,7 @@ export const useArticleStore = create<Store>((set, get) => ({
       brief,
       content: '',
       platformDrafts: {},
-      templateId: loadConfig().defaultTemplateId,
+      templateId: brief.templateId ?? loadConfig().defaultTemplateId,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };

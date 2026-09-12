@@ -1,4 +1,4 @@
-import type { CreatorConfig } from './types';
+import type { AgentOverride, CreatorConfig } from './types';
 import { DEFAULT_WECHAT_TEMPLATE_ID } from './templates';
 
 export const DEFAULT_CONFIG: CreatorConfig = {
@@ -43,4 +43,40 @@ export function loadConfig(): CreatorConfig {
 export function saveConfig(cfg: CreatorConfig) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+}
+
+// ===== Agent 定制（能力市场「配置」）=====
+
+// 纯合并：patch 覆盖 current 的对应字段；空对象视为无定制。
+export function mergeAgentOverride(current: AgentOverride | undefined, patch: AgentOverride): AgentOverride {
+  return {
+    directive: patch.directive !== undefined ? patch.directive : current?.directive,
+    defaults: {
+      ...current?.defaults,
+      ...patch.defaults,
+    },
+  };
+}
+
+export function getAgentOverride(agentId?: string): AgentOverride | undefined {
+  if (!agentId) return undefined;
+  return loadConfig().agentOverrides?.[agentId];
+}
+
+export function saveAgentOverride(agentId: string, patch: AgentOverride) {
+  const config = loadConfig();
+  saveConfig({
+    ...config,
+    agentOverrides: {
+      ...config.agentOverrides,
+      [agentId]: mergeAgentOverride(config.agentOverrides?.[agentId], patch),
+    },
+  });
+}
+
+export function clearAgentOverride(agentId: string) {
+  const config = loadConfig();
+  if (!config.agentOverrides?.[agentId]) return;
+  const { [agentId]: _removed, ...rest } = config.agentOverrides;
+  saveConfig({ ...config, agentOverrides: rest });
 }
