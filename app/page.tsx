@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { FileText, PenLine } from 'lucide-react';
 import { AppShell } from '@/components/AppShell';
 import { QuickComposer } from '@/components/QuickComposer';
+import { RewriterLauncher } from '@/components/RewriterLauncher';
 import { useArticleStore } from '@/src/lib/store';
 import { useAiStatus } from '@/src/lib/use-ai-status';
 import { loadConfig } from '@/src/lib/config';
@@ -51,6 +52,10 @@ export default function HomePage() {
               <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-ink-soft sm:text-base">这里就是唯一的创作入口。说清楚你要写什么，或直接放入资料；系统会自动选择合适能力。</p>
             </div>
             <QuickComposer/>
+          </section>
+
+          <section className="border-t border-white/80 pt-7">
+            <RewriterLauncher/>
           </section>
 
           <section className="border-t border-white/80 pt-7">

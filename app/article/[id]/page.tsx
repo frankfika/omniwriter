@@ -373,6 +373,11 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
             chars: event.chars,
             preview: event.preview,
           } : previous);
+        } else if (event.type === 'verify') {
+          setGenerationProgress((previous) => previous ? {
+            ...previous,
+            verdict: event.verdict,
+          } : previous);
         } else if (event.type === 'done') {
           completed = true;
           generatedMaster = event.md;

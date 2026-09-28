@@ -1,10 +1,11 @@
 'use client';
 
 import * as React from 'react';
-import { Check, Clock3, FileText, Loader2, Square } from 'lucide-react';
+import { Check, Clock3, FileText, Loader2, ShieldCheck, Square } from 'lucide-react';
 import { Button } from './ui/button';
 import type { GenerationStage, GenerationViewState } from '@/src/lib/generation-events';
 import type { MaterialType } from '@/src/lib/types';
+import { cn } from './ui/cn';
 
 const STAGE_INDEX: Record<GenerationStage, number> = {
   source: 0,
@@ -88,6 +89,26 @@ export function GenerationProgress({
         )}
         {!state.preview && <p className="mt-2 text-xs text-ink-muted">第一段正文返回后会显示真实片段，不展示模拟过程。</p>}
       </div>
+      {state.verdict && (
+        <div className={cn('relative mt-3 rounded-xl border p-3 text-xs', state.verdict.passed ? 'border-emerald-200 bg-emerald-50/80 text-emerald-700' : 'border-amber-200 bg-amber-50/80 text-amber-700')}>
+          <p className="flex items-center gap-1.5 font-semibold">
+            <ShieldCheck size={12}/> 交叉验证 · {state.verdict.model} · {state.verdict.passed ? '通过' : '需要修改'} · {state.verdict.score}/100
+          </p>
+          {state.verdict.issues.length > 0 && (
+            <ul className="mt-1 list-disc pl-4">
+              {state.verdict.issues.map((issue, index) => (<li key={index}>{issue}</li>))}
+            </ul>
+          )}
+          {state.verdict.suggestions.length > 0 && (
+            <>
+              <p className="mt-1.5 font-medium">建议：</p>
+              <ul className="mt-0.5 list-disc pl-4">
+                {state.verdict.suggestions.map((suggestion, index) => (<li key={index}>{suggestion}</li>))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
       <p className="relative mt-3 text-[10px] leading-relaxed text-ink-muted">完成后自动进入可编辑原稿{platformCount > 0 ? `，并在后台继续准备 ${platformCount} 个平台版本` : ''}。停止不会覆盖已有内容。</p>
     </div>
   );

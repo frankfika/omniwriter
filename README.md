@@ -24,6 +24,7 @@ OmniWriter 是一套**开放**的创作 Agent：给它素材和你的立场，�
 - **设置**：默认平台、双语、通用写作风格、公众号系列标题 / Eyebrow / 署名、新闻 Eyebrow。
 - **文章存档**：localStorage 持久化，本地优先，断网可用。
 - **离线恢复**：已访问的页面和静态资源由 Service Worker 缓存；服务短时不可达时仍可打开并编辑本地文章，恢复后自动提示。
+- **洗稿（Rewriter）**：首页底部「洗稿」面板：贴一个推特 / 新闻 / GitHub 链接，自动抽取原文与原图，按目标平台（默认 X/Twitter，可切公众号 / 知乎 / 小红书）改写并保留图片；自带复制 + `twitter.com/intent/tweet` 一键发推。每次改写 / 生成都会跑一次第二模型交叉验证，给出通过/不通过、问题清单、改进建议；用户和兜底 key 都不在时退到本机 `codex` / `claude` CLI 委托验证。生成主模型失败时也会自动切到服务端兜底 key 重试一次，并把真实错误回显给用户。
 
 ## 快速开始
 
@@ -118,12 +119,17 @@ FETCH_TIMEOUT_MS=15000               # 抓取新闻链接的超时
 ├── app/                  Next.js App Router（首页 / 工作台 / 设置 / api）
 ├── components/           UI 组件（AppShell / Editor / BriefPanel / PreviewPane / PlatformTabs / ui/*）
 ├── src/lib/              内置内容模块
-│   ├── ai.ts             MiniMax-M2.7 客户端 + 提示词
+│   ├── ai.ts             MiniMax-M2.7 客户端 + 提示词（含服务端兜底重试）
 │   ├── editorial.ts      编辑准则 + 事实核查 + 石墨风 CSS + 校验
 │   ├── platforms.ts      九平台规范
 │   ├── styles.ts         11 套写作风格与提示词细则
 │   ├── export-html.ts    HTML 构建 / 富文本复制（客户端安全）
 │   ├── export-zip.ts     ZIP 打包（服务端）
+│   ├── twitter.ts        推特/X 公开抓取（CDN syndication + fxtwitter 备胎）
+│   ├── rewrite.ts        洗稿核心（推特 / 新闻 / GitHub → 目标平台新稿）
+│   ├── rewrite-helpers.ts洗稿用纯函数（解析、裁剪、hashtag 切分）
+│   ├── cross-validate.ts 第二模型 / Codex / Claude Code 交叉验证
+│   ├── custom-agents.ts  自定义 Agent 持久化（市场扩展）
 │   ├── store.ts          Zustand store + 持久化
 │   └── config.ts         默认配置（用户配置在浏览器 localStorage）
 ├── tailwind.config.ts    设计令牌（石墨色 + 中文字体栈）

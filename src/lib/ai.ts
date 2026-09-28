@@ -126,19 +126,42 @@ export async function generateMasterStream(
     ? `${MASTER_SYSTEM}\n\n## 本 Agent 写作指令\n${directive}`
     : MASTER_SYSTEM;
   opts.onPrepared?.();
-  const stream = getClient(ai).messages.stream(
-    {
-      model: resolveModel(ai),
-      max_tokens: brief.length === 'short' ? 1500 : brief.length === 'long' ? 4500 : 3000,
-      system,
-      messages: [{ role: 'user', content: user }],
-    },
-    opts.signal ? { signal: opts.signal } : undefined,
-  );
-  opts.onRequested?.();
-  if (opts.onText) stream.on('text', opts.onText);
-  const msg = await stream.finalMessage();
-  return ensureBilingualMaster(brief, extractText(msg), ai, opts.signal, opts.onBilingual);
+  const attempt = async (useAi?: AiLike) => {
+    const stream = getClient(useAi).messages.stream(
+      {
+        model: resolveModel(useAi),
+        max_tokens: brief.length === 'short' ? 1500 : brief.length === 'long' ? 4500 : 3000,
+        system,
+        messages: [{ role: 'user', content: user }],
+      },
+      opts.signal ? { signal: opts.signal } : undefined,
+    );
+    opts.onRequested?.();
+    if (opts.onText) stream.on('text', opts.onText);
+    const msg = await stream.finalMessage();
+    return ensureBilingualMaster(brief, extractText(msg), useAi, opts.signal, opts.onBilingual);
+  };
+  try {
+    return await attempt(ai);
+  } catch (error) {
+    // 用户配的 key / 模型偶发失败时，给一次"用服务端兜底 key 走默认模型"的回退机会。
+    // - 用量/余额不足是用户账户问题，重试同样会失败 → 直接抛出。
+    // - 网络/限流/超时则允许切到兜底 key 再跑一次，省掉用户一次手动重试。
+    if (opts.signal?.aborted) throw error;
+    const message = (error as Error)?.message ?? '';
+    if (/用量上限|余额不足|额度|quota|usage limit|Token Plan|购买积分|insufficient|upgrade|plan/i.test(message)) throw error;
+    if (!hasServerFallbackKey()) throw error;
+    return await attempt(undefined);
+  }
+}
+
+// 只有服务端自己配了 key（env 或 secret file）时才谈"兜底"；用户自带 key 失败时不能拿空的去重试。
+function hasServerFallbackKey(): boolean {
+  try {
+    return Boolean(resolveServerApiKey());
+  } catch {
+    return false;
+  }
 }
 
 async function ensureBilingualMaster(brief: Brief, draft: string, ai?: AiLike, signal?: AbortSignal, onBilingual?: () => void): Promise<string> {

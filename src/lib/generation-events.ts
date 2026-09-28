@@ -34,6 +34,13 @@ export type GenerationStreamEvent =
       issues: number;
       at: number;
     }
+  // 交叉验证：母稿生成完成后由第二个模型质检。事件可选，消费者不认识时忽略即可。
+  | {
+      type: 'verify';
+      requestId: string;
+      verdict: CrossValidationVerdict;
+      at: number;
+    }
   | {
       type: 'error';
       requestId: string;
@@ -41,6 +48,15 @@ export type GenerationStreamEvent =
       retryable: boolean;
       at: number;
     };
+
+export interface CrossValidationVerdict {
+  model: string;
+  passed: boolean;
+  score: number;
+  issues: string[];
+  suggestions: string[];
+  fallback?: string;
+}
 
 export interface GenerationViewState {
   requestId: string;
@@ -51,5 +67,6 @@ export interface GenerationViewState {
   chars: number;
   preview?: string;
   completed: GenerationStage[];
+  verdict?: CrossValidationVerdict;
 }
 

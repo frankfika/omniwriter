@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateMasterStream, type AiLike } from '@/src/lib/ai';
 import { resolveAgent } from '@/src/lib/agents';
 import { validateMarkdown } from '@/src/lib/editorial';
+import { crossValidateDraft } from '@/src/lib/cross-validate';
 import type { Brief } from '@/src/lib/types';
 import type { GenerationStreamEvent } from '@/src/lib/generation-events';
 
@@ -122,6 +123,17 @@ export async function POST(req: NextRequest) {
             detail: `${md.length.toLocaleString('zh-CN')} 字`, at: Date.now(),
           });
           const title = md.match(/^# (.+)$/m)?.[1]?.trim();
+          // 交叉验证：跑在 done 之前，给用户多一道质检；失败不影响主流程，
+          // 事件也是可选的——不认识 verify 的消费者忽略即可。
+          try {
+            const verdict = await crossValidateDraft({
+              draft: md,
+              platform: brief.platforms[0] ?? 'wechat',
+              sourceSummary: source.slice(0, 800),
+              signal: req.signal,
+            });
+            if (verdict) send({ type: 'verify', requestId, verdict, at: Date.now() });
+          } catch { /* 验证失败不阻断交付 */ }
           send({
             type: 'done', requestId, md, title,
             durationMs: Date.now() - startedAt,
