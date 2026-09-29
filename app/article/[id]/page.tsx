@@ -122,22 +122,30 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
   const insertImageAtCursor = React.useCallback((image: CursorImageInsert): boolean => {
     const editor = editorInstanceRef.current;
     if (!editor || editor.isDestroyed) return false;
-    editor.chain().focus().insertContent([
-      {
-        type: 'image',
-        attrs: {
-          src: image.dataUrl,
-          alt: image.alt,
-          sourceUrl: image.sourceUrl || null,
-          sourceLabel: image.sourceLabel || null,
-          imageLicense: image.license || null,
-          creator: image.creator || null,
+    try {
+      editor.chain().focus().insertContent([
+        {
+          type: 'image',
+          attrs: {
+            src: image.dataUrl,
+            alt: image.alt,
+            sourceUrl: image.sourceUrl || null,
+            sourceLabel: image.sourceLabel || null,
+            imageLicense: image.license || null,
+            creator: image.creator || null,
+          },
         },
-      },
-      ...(image.caption ? [{ type: 'paragraph', content: [{ type: 'text', text: image.caption }] }] : []),
-    ]).run();
-    return true;
-  }, []);
+        ...(image.caption ? [{ type: 'paragraph', content: [{ type: 'text', text: image.caption }] }] : []),
+      ]).run();
+      return true;
+    } catch (error) {
+      // 用户点了插入但 Tiptap schema 拒绝（极端情况下如 schema mismatch）——
+      // 静默 fallback 到文末追加会让用户疑惑「为什么图片不在我点的地方」。
+      console.error('[OmniWriter] 插入图片失败', error);
+      showError('图片无法在光标处插入，已附加到文末。');
+      return false;
+    }
+  }, [showError]);
 
   React.useEffect(() => {
     if (!article || language === 'zh') return;
@@ -255,12 +263,23 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
     let cursor = 0;
     let completed = 0;
     const failed: PlatformId[] = [];
+    const inFlight = new Set<PlatformId>();
+    const updateAdapting = () => {
+      // 把「当前正在飞的平台」投影到 setAdapting：并发为 2 时，两个同时飞，spinner 只跟其中一个，
+      // 但 batchProgress 仍然告诉用户整体进度。
+      const first = [...inFlight][0] ?? null;
+      setAdapting(first);
+    };
     const worker = async () => {
       while (!controller.signal.aborted) {
         const index = cursor;
         cursor += 1;
         if (index >= targets.length) return;
         const platform = targets[index];
+        // 单平台 spinner：让 PlatformTabs 的「生成中」状态落在当前正在跑的那个 tab，
+        // 之前只有一个全局 batchProgress，用户看不出哪个平台在飞。
+        inFlight.add(platform);
+        updateAdapting();
         try {
           const text = platform === 'wechat'
             ? wechatDraft
@@ -276,9 +295,11 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
         } catch (error) {
           if ((error as Error).name !== 'AbortError') failed.push(platform);
         } finally {
+          inFlight.delete(platform);
           if (runId === platformBatchRunId.current && !controller.signal.aborted) {
             completed += 1;
             setBatchProgress({ done: completed, total: targets.length });
+            updateAdapting();
           }
         }
       }
@@ -713,15 +734,18 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
         });
         payload = (await res.json().catch(() => ({}))) as { md?: string; title?: string; error?: string };
         if (!res.ok || !payload.md?.trim()) throw new Error(payload.error || '这次修改没有返回完整稿件');
+      } catch (error) {
+        // 把 abort / 被取代 / 网络异常这些细枝末节翻译成中文提示，不要把
+        // 浏览器原生 AbortError 字符串直接抛给用户。
+        if (refineAbort.signal.aborted) {
+          throw new Error(refineTimedOut ? '改稿超过 90 秒，请稍后重试' : '改稿已停止，原稿没有变化');
+        }
+        if (refineController.current !== null) throw new Error('有新的改稿请求正在处理，本次结果已忽略');
+        throw error;
       } finally {
         window.clearTimeout(refineTimer);
         if (refineController.current === refineAbort) refineController.current = null;
       }
-      // 超时或已被更新的操作取代时，不要覆盖当前正文。
-      if (refineAbort.signal.aborted) {
-        throw new Error(refineTimedOut ? '改稿超过 90 秒，请稍后重试' : '改稿已停止，原稿没有变化');
-      }
-      if (refineController.current !== null) throw new Error('有新的改稿请求正在处理，本次结果已忽略');
       setContent(article.id, markdownToInlineHtml(payload.md));
       if (payload.title) onTitle(payload.title);
       setLanguage('zh');

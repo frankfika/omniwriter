@@ -40,10 +40,68 @@ export function joinBilingualContent(
 }
 
 export function extractContentTitle(content: string): string | null {
-  const html = content.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i);
-  if (html) return decodeBasicEntities(html[1].replace(/<[^>]+>/g, '').trim());
-  const markdown = content.match(/^#\s+(.*)$/m);
-  return markdown ? markdown[1].trim() : null;
+  // 先取 HTML 形态的 <h1>，再退到 Markdown 的 # 标题。两种都要跳过围栏代码块、
+  // HTML <pre> / Tiptap 代码节点——否则「```ts\n# not a title\n```」会被误当成标题。
+  const htmlMatch = matchHeadingOutsideCode(content, /<h1\b[^>]*>([\s\S]*?)<\/h1>/i);
+  if (htmlMatch) return decodeBasicEntities(htmlMatch[1].replace(/<[^>]+>/g, '').trim());
+  const markdownMatch = matchHeadingOutsideCode(content, /^#\s+(.*)$/m);
+  return markdownMatch ? markdownMatch[1].trim() : null;
+}
+
+// 在 Markdown 代码围栏和 HTML <pre> 之外匹配 heading，避免把代码示例里的 # 当成标题。
+function matchHeadingOutsideCode(content: string, pattern: RegExp): RegExpMatchArray | null {
+  if (!pattern.global) pattern = new RegExp(pattern.source, pattern.flags + 'g');
+  const codeFenceRanges: Array<[number, number]> = collectCodeFenceRanges(content);
+  const preRanges: Array<[number, number]> = [];
+  const preRegex = /<pre\b[\s\S]*?<\/pre>/gi;
+  let preMatch: RegExpExecArray | null;
+  while ((preMatch = preRegex.exec(content)) !== null) {
+    preRanges.push([preMatch.index, preMatch.index + preMatch[0].length]);
+  }
+  const insideFence = (start: number, end: number) =>
+    codeFenceRanges.some(([s, e]) => start >= s && end <= e) ||
+    preRanges.some(([s, e]) => start >= s && end <= e);
+  let m: RegExpExecArray | null;
+  while ((m = pattern.exec(content)) !== null) {
+    if (!insideFence(m.index, m.index + m[0].length)) return m;
+  }
+  return null;
+}
+
+// 收集代码围栏区间：先按闭区间匹配，再追加每个「未闭合」的 ``` / ~~~ 起点至文档末尾。
+// 服务端偶尔截断响应会让 AI 输出一段没闭合的代码块，这种伪标题也要被排除。
+function collectCodeFenceRanges(content: string): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  const closedRegex = /```[\s\S]*?```|~~~[\s\S]*?~~~/g;
+  let match: RegExpExecArray | null;
+  while ((match = closedRegex.exec(content)) !== null) {
+    ranges.push([match.index, match.index + match[0].length]);
+  }
+  // 找出所有 fence 起止符（开 / 闭），剩下的开符没找到对应闭符 → 视为「未闭合」。
+  const markers: Array<{ pos: number; char: string; isClose: boolean }> = [];
+  const markerRegex = /(^|\n)(```|~~~)/g;
+  while ((match = markerRegex.exec(content)) !== null) {
+    const fenceChar = match[2];
+    const before = content.slice(0, match.index);
+    const sameCount = (before.match(new RegExp('(^|\\n)' + fenceChar, 'g')) || []).length;
+    markers.push({ pos: match.index + match[1].length, char: fenceChar, isClose: sameCount % 2 === 1 });
+  }
+  // 配对：stack 顶部与新 marker 必须同字符才闭合
+  const stack: Array<{ pos: number; char: string }> = [];
+  for (const m of markers) {
+    const top = stack[stack.length - 1];
+    if (m.isClose && top && top.char === m.char) {
+      stack.pop();
+      // 已在 closedRegex 里匹配，不重复登记
+    } else {
+      stack.push({ pos: m.pos, char: m.char });
+    }
+  }
+  // 剩下的就是「未闭合的开符」，从它到文末视为围栏。
+  for (const open of stack) {
+    ranges.push([open.pos, content.length]);
+  }
+  return ranges;
 }
 
 export function replaceContentTitle(content: string, title: string): string {
@@ -53,8 +111,11 @@ export function replaceContentTitle(content: string, title: string): string {
   }
 
   const markdownHeading = /^#\s+.*$/m;
-  if (markdownHeading.test(content)) return content.replace(markdownHeading, `# ${title}`);
-  if (!title) return content;
+  // Markdown 分支也要 escape——LLM 给的标题或用户输入里若含 <script> 等字符，
+  // 经下一轮 markdownToInlineHtml 会变成真实标签。代价是 `# &` 这种合法字符会被写为 `# &amp;`，
+  // 渲染端仍然按 HTML 实体还原，行为不变。
+  if (markdownHeading.test(content)) return content.replace(markdownHeading, `# ${escapeHtml(title)}`);
+  if (!title.trim()) return content;
 
   return `<h1>${escapeHtml(title)}</h1>${content}`;
 }

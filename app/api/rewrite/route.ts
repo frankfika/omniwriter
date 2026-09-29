@@ -51,6 +51,8 @@ export async function POST(req: NextRequest) {
     if ((error as Error).name === 'AbortError') {
       return NextResponse.json({ error: '洗稿已取消' }, { status: 504 });
     }
-    return NextResponse.json({ error: (error as Error).message || '洗稿失败' }, { status: 500 });
+    const upstream = (error as { status?: number }).status;
+    const status = typeof upstream === 'number' && upstream >= 400 && upstream < 500 ? upstream : 500;
+    return NextResponse.json({ error: (error as Error).message || '洗稿失败' }, { status });
   }
 }

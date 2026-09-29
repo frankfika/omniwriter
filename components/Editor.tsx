@@ -97,6 +97,9 @@ export function Editor({
         firstUpdateRef.current = false;
         return;
       }
+      // 告诉 useEffect：下一帧到位的 prop 是我们自己写的，不是外部流入，
+      // 这样就不会触发 setContent 把刚写入的内容再覆盖一次。
+      pendingFromExternal.current = true;
       onChange(editor.getHTML());
     },
     immediatelyRender: false,
@@ -105,9 +108,19 @@ export function Editor({
   // 记录上一次传给编辑器的 html：仅当外部真的改写了内容（语言切换 / 生成 / 导入 / 改稿）
   // 才同步进编辑器，并保留一个可撤销步骤；自己的输入回传时不触发，避免打断撤销栈。
   const prevHtmlRef = React.useRef(html);
+  // 区分「html 是用户输入产生的」和「html 是外部写入的」：用 pendingFromExternal 标记，
+  // 避免 onUpdate → setContent 回流的同一个值被当成「外部变化」再覆盖回去。
+  const pendingFromExternal = React.useRef(false);
 
   React.useEffect(() => {
     if (!editor) return;
+    // 若是 onUpdate 触发的 prop 变化（前一次设置过 pendingFromExternal），跳过 setContent：
+    // 这部分已经在编辑器里了，写回只会触发新一轮 onUpdate + 撤销栈错位。
+    if (pendingFromExternal.current) {
+      pendingFromExternal.current = false;
+      prevHtmlRef.current = html;
+      return;
+    }
     if (prevHtmlRef.current !== html && editor.getHTML() !== html) {
       editor.commands.setContent(html || '', true);
     }

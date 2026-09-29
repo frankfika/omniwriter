@@ -1,6 +1,6 @@
 // bilingual 纯函数自检：split/join 往返幂等与边界。
 import { describe, expect, it } from 'vitest';
-import { joinBilingualContent, splitBilingualContent } from '../src/lib/bilingual';
+import { extractContentTitle, joinBilingualContent, splitBilingualContent } from '../src/lib/bilingual';
 
 describe('split/join 往返', () => {
   it('HTML 分隔符：往返后 zh/en 不变，再 join 幂等', () => {
@@ -53,5 +53,32 @@ describe('边界', () => {
   it('join 空英文只返回中文，不追加分隔符', () => {
     expect(joinBilingualContent('中文正文', '')).toBe('中文正文');
     expect(joinBilingualContent('中文正文  \n', '   ')).toBe('中文正文');
+  });
+});
+
+describe('extractContentTitle — 跳过代码围栏里的伪标题', () => {
+  it('Markdown # 标题应被正常返回', () => {
+    expect(extractContentTitle('# 我的标题\n\n正文')).toBe('我的标题');
+  });
+
+  it('代码围栏里出现的 # 不应被当成标题', () => {
+    const content = '```ts\n# not a title\nconst x = 1;\n```\n\n## 副标题\n\n正文';
+    expect(extractContentTitle(content)).toBeNull();
+  });
+
+  it('真实标题在代码块之后仍能被识别', () => {
+    const content = '```ts\nconst x = 1;\n```\n\n# 我的标题\n\n正文';
+    expect(extractContentTitle(content)).toBe('我的标题');
+  });
+
+  it('HTML <h1> 在 <pre> 内出现不算标题', () => {
+    const content = '<pre><h1>code sample</h1></pre><h1>真标题</h1>';
+    expect(extractContentTitle(content)).toBe('真标题');
+  });
+
+  it('未闭合的代码围栏（截断响应）里出现的 # 不算标题', () => {
+    // AI 输出到 ``` 后面就被截断、没写关闭符；这里出现的 # 不能被当成标题。
+    const content = '```ts\nconst x = 1;\n# not a real title';
+    expect(extractContentTitle(content)).toBeNull();
   });
 });

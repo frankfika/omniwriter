@@ -150,7 +150,9 @@ export async function generateMasterStream(
     if (opts.signal?.aborted) throw error;
     const message = (error as Error)?.message ?? '';
     if (/用量上限|余额不足|额度|quota|usage limit|Token Plan|购买积分|insufficient|upgrade|plan/i.test(message)) throw error;
-    if (!hasServerFallbackKey()) throw error;
+    // 只有「用户没自带 key」的情况才能切到服务端兜底：避免用户自带 key 失败时拿空的再跑一次
+    // ——attempt(undefined) 在无兜底时也会抛 'Missing API key' 之类的 cryptic 错误，混淆真问题。
+    if (ai?.apiKey?.trim() || !hasServerFallbackKey()) throw error;
     return await attempt(undefined);
   }
 }
