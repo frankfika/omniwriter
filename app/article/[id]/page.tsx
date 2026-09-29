@@ -311,10 +311,15 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
         () => worker(),
       ),
     );
-    if (runId !== platformBatchRunId.current || controller.signal.aborted) return;
+    if (runId !== platformBatchRunId.current || controller.signal.aborted) {
+      // 取消/被取代时清掉 spinner，否则它会一直停在某个被中断的平台上
+      setAdapting(null);
+      return;
+    }
 
     platformBatchController.current = null;
     setBatchProgress(null);
+    setAdapting(null);
     if (failed.length) {
       showError(`已生成 ${targets.length - failed.length}/${targets.length} 个平台稿；${failed.map((platform) => PLATFORMS[platform].label).join('、')}可单独重试。`);
     }
@@ -327,6 +332,8 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
     platformBatchController.current = null;
     platformBatchRunId.current += 1;
     setBatchProgress(null);
+    // 取消上一个 batch 后立刻重新生成，避免 setAdapting 卡死
+    setAdapting(null);
     const sourceBrief = briefOverride ?? article.brief;
     const briefSnapshot: Brief = { ...sourceBrief, platforms: [...sourceBrief.platforms] };
     // 用户在能力市场对该 Agent 定制的写作指令随请求发给服务端（服务端只认内置静态表）；
@@ -475,13 +482,19 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
     }
   }
 
-  const onCancelGeneration = () => generationController.current?.abort();
+  const onCancelGeneration = () => {
+    generationController.current?.abort();
+    generationController.current = null;
+  };
   const onCancelPlatformBatch = () => {
     if (!platformBatchController.current) return;
     platformBatchController.current.abort();
     platformBatchController.current = null;
     platformBatchRunId.current += 1;
     setBatchProgress(null);
+    // 取消时不重置 spinner 会卡在「正在生成 X 稿」上，后续单平台适配和「生成全部」
+    // 都会被 onAdapt/onAdaptAll 的 adapting 守卫直接挡掉。Reproducible UX lockout。
+    setAdapting(null);
     showError('已停止生成其余平台稿；已经完成的稿件会保留。');
   };
 

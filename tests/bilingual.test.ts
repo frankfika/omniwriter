@@ -81,4 +81,11 @@ describe('extractContentTitle — 跳过代码围栏里的伪标题', () => {
     const content = '```ts\nconst x = 1;\n# not a real title';
     expect(extractContentTitle(content)).toBeNull();
   });
+
+  it('空标题（用户敲了 # 又删掉文字）应返回 null 而不是空串', () => {
+    // 上游用 `?? fallback` 时，空串会被当 title 写进 store，标题栏因此显示空白。
+    expect(extractContentTitle('<h1></h1>正文')).toBeNull();
+    expect(extractContentTitle('# \n\n正文')).toBeNull();
+    expect(extractContentTitle('<h1>   </h1>正文')).toBeNull();
+  });
 });

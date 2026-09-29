@@ -42,10 +42,21 @@ export function joinBilingualContent(
 export function extractContentTitle(content: string): string | null {
   // 先取 HTML 形态的 <h1>，再退到 Markdown 的 # 标题。两种都要跳过围栏代码块、
   // HTML <pre> / Tiptap 代码节点——否则「```ts\n# not a title\n```」会被误当成标题。
+  // 空标题（用户敲了 # 又删掉文字）必须返回 null，而不是 ''——否则上游 `?? '' ??`
+  // 链断掉，标题输入框会显示空、但 ValidationStrip / header 又用 fallback 字符串，
+  // 出现「输入框空但显示带标题」的不一致。
+  // Markdown 用 [ \t]+ 而不是 \s+：避免 \s 把行尾的 \n 吃进去让 $ 跨过正文，从而误把正文当标题。
   const htmlMatch = matchHeadingOutsideCode(content, /<h1\b[^>]*>([\s\S]*?)<\/h1>/i);
-  if (htmlMatch) return decodeBasicEntities(htmlMatch[1].replace(/<[^>]+>/g, '').trim());
-  const markdownMatch = matchHeadingOutsideCode(content, /^#\s+(.*)$/m);
-  return markdownMatch ? markdownMatch[1].trim() : null;
+  if (htmlMatch) {
+    const text = decodeBasicEntities(htmlMatch[1].replace(/<[^>]+>/g, '').trim());
+    return text.length > 0 ? text : null;
+  }
+  const markdownMatch = matchHeadingOutsideCode(content, /^#[ \t]+(.*)$/m);
+  if (markdownMatch) {
+    const text = markdownMatch[1].trim();
+    return text.length > 0 ? text : null;
+  }
+  return null;
 }
 
 // 在 Markdown 代码围栏和 HTML <pre> 之外匹配 heading，避免把代码示例里的 # 当成标题。
@@ -105,16 +116,25 @@ function collectCodeFenceRanges(content: string): Array<[number, number]> {
 }
 
 export function replaceContentTitle(content: string, title: string): string {
-  const htmlHeading = /<h1(\b[^>]*)>[\s\S]*?<\/h1>/i;
-  if (htmlHeading.test(content)) {
-    return content.replace(htmlHeading, (_full, attrs: string) => `<h1${attrs}>${escapeHtml(title)}</h1>`);
+  // 复用 extractContentTitle 的「跳过围栏 / pre」语义，避免误替换 <pre> 里的 <h1>。
+  const htmlMatch = matchHeadingOutsideCode(content, /<h1(\b[^>]*)>[\s\S]*?<\/h1>/i);
+  if (htmlMatch && htmlMatch.index !== undefined) {
+    const attrs = htmlMatch[1];
+    const start = htmlMatch.index;
+    // 替换：取 <h1 attrs> 后的「attrs」，把整个 <h1 ...>...</h1> 替换掉
+    const openTagMatch = htmlMatch[0].match(/^<h1(\b[^>]*)>[\s\S]*?<\/h1>$/i);
+    const capturedAttrs = openTagMatch?.[1] ?? attrs;
+    const openTag = `<h1${capturedAttrs}>`;
+    const innerStart = start + openTag.length;
+    const innerEnd = start + htmlMatch[0].lastIndexOf('</h1>');
+    return content.slice(0, innerStart) + escapeHtml(title) + content.slice(innerEnd);
   }
 
-  const markdownHeading = /^#\s+.*$/m;
+  const markdownMatch = matchHeadingOutsideCode(content, /^#[ \t]+.*$/m);
   // Markdown 分支也要 escape——LLM 给的标题或用户输入里若含 <script> 等字符，
   // 经下一轮 markdownToInlineHtml 会变成真实标签。代价是 `# &` 这种合法字符会被写为 `# &amp;`，
   // 渲染端仍然按 HTML 实体还原，行为不变。
-  if (markdownHeading.test(content)) return content.replace(markdownHeading, `# ${escapeHtml(title)}`);
+  if (markdownMatch) return content.replace(markdownMatch[0], `# ${escapeHtml(title)}`);
   if (!title.trim()) return content;
 
   return `<h1>${escapeHtml(title)}</h1>${content}`;
