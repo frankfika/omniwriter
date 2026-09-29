@@ -157,7 +157,9 @@ export function Editor({
   );
 }
 
-// 图片文件 → 降采样 dataURL → 单事务插入（图片 + 图注），避免对旧 state 二次 dispatch
+// 图片文件 → 降采样 dataURL → 单事务插入图片节点。
+// 图注延后到用户主动编辑（点击图片后会出现在工具栏），避免 window.prompt 阻塞
+// iOS PWA 键盘与 IME 输入流。
 async function insertImageFile(
   view: EditorView,
   file: File,
@@ -173,10 +175,8 @@ async function insertImageFile(
       return;
     }
   }
-  const caption = window.prompt('图注（可选，符合「图 N｜描述。图片来源：…」格式更佳）：') ?? '';
-  const alt = caption || '图片';
   const { state } = view;
-  const node = state.schema.nodes.image.create({ src: dataUrl, alt });
+  const node = state.schema.nodes.image.create({ src: dataUrl, alt: '图片' });
   const pos = at
     ? view.posAtCoords({ left: at.x, top: at.y })?.pos ?? state.selection.from
     : state.selection.from;
@@ -186,12 +186,9 @@ async function insertImageFile(
   } else {
     tr.replaceSelectionWith(node);
   }
-  // 光标会落在图片节点上（NodeSelection），显式在图片之后插入一个图注段落节点，
-  // 避免覆盖图片（文本节点不能含换行，insertText('\n…') 不会产生新段落）。
-  if (caption) {
-    const captionPos = Math.min(tr.mapping.map(pos, 1), tr.doc.content.size);
-    tr.insert(captionPos, state.schema.nodes.paragraph.create({}, state.schema.text(caption)));
-  }
+  // 在图片之后插入一个空段落，让光标自动落在那里，避免 iOS 上 NodeSelection 没有键盘焦点。
+  const afterPos = Math.min(tr.mapping.map(pos, 1), tr.doc.content.size);
+  tr.insert(afterPos, state.schema.nodes.paragraph.create());
   view.dispatch(tr);
 }
 

@@ -21,11 +21,10 @@ interface SSEEvent {
 async function consumeSSE(
   body: ReadableStream<Uint8Array>,
   onEvent: (e: SSEEvent) => void,
-): Promise<{ ok: boolean; lastEventType?: string }> {
+): Promise<void> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  let completed = false;
   try {
     while (true) {
       const { done, value } = await reader.read();
@@ -34,14 +33,19 @@ async function consumeSSE(
       buffer = chunks.pop() ?? '';
       for (const chunk of chunks) {
         const data = chunk.split('\n').find((line) => line.startsWith('data: '))?.slice(6);
-        if (data) onEvent(JSON.parse(data) as SSEEvent);
+        if (data) {
+          try {
+            onEvent(JSON.parse(data) as SSEEvent);
+          } catch {
+            /* 与 page.tsx 行为一致：单条事件损坏不能毁掉整条流 */
+          }
+        }
       }
       if (done) break;
     }
   } finally {
     reader.releaseLock();
   }
-  return { ok: completed, lastEventType: undefined };
 }
 
 function sseStream(events: SSEEvent[]): ReadableStream<Uint8Array> {
@@ -125,5 +129,48 @@ describe('SSE 消费循环 (article-page)', () => {
     await consumeSSE(stream, (e) => received.push(e));
     expect(received.length).toBe(1);
     expect(received[0]?.type).toBe('done');
+  });
+
+  it('坏 JSON 数据应被吞掉而后续有效事件仍到达', async () => {
+    // 模拟「解析失败不能整条流爆炸」：坏 JSON → 跳过；后续两个 valid event 仍要落地。
+    const events: SSEEvent[] = [
+      { type: 'stage', requestId: 'a', stage: 'source', label: 'A' },
+      { type: 'stage', requestId: 'a', stage: 'rules', label: 'B' },
+      { type: 'done', requestId: 'a', md: 'ok', title: 't' },
+    ];
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(`data: ${events[0] && JSON.stringify(events[0])}\n\n`));
+        controller.enqueue(new TextEncoder().encode('data: {not-json,\n\n'));
+        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(events[1])}\n\n`));
+        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(events[2])}\n\n`));
+        controller.close();
+      },
+    });
+
+    // 复刻 page.tsx 的容错语义：JSON.parse 抛错要 try/catch 跳过。
+    const received: SSEEvent[] = [];
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+      const chunks = buffer.split('\n\n');
+      buffer = chunks.pop() ?? '';
+      for (const chunk of chunks) {
+        const data = chunk.split('\n').find((line) => line.startsWith('data: '))?.slice(6);
+        if (data) {
+          try {
+            received.push(JSON.parse(data) as SSEEvent);
+          } catch {
+            /* 单条事件损坏不能毁掉整条流 */
+          }
+        }
+      }
+      if (done) break;
+    }
+    expect(received.length).toBe(3);
+    expect(received.map((e) => e.type)).toEqual(['stage', 'stage', 'done']);
   });
 });

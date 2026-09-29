@@ -353,8 +353,9 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
         // 服务端会在每个事件上附带 requestId；旧过滤在客户端另起一个 UUID
         // 然后和服务端的对比——两端互不可见，所以会丢掉所有事件。
         // AbortController + 循环退出已经天然挡住串流旧请求，这里直接放过即可。
-        console.log('[DBG] applyEvent', event.type, 'chars=', (event as { chars?: number }).chars);
         if (event.type === 'stage') {
+          // 先展开 previous，再覆盖本事件负责的字段：保证后续 stage 事件不会
+          // 把 verify 事件写入的 verdict 之类附带字段意外清掉。
           setGenerationProgress((previous) => ({
             requestId: event.requestId,
             startedAt: previous?.startedAt ?? startedAt,
@@ -366,6 +367,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
             completed: previous && previous.stage !== event.stage
               ? Array.from(new Set([...previous.completed, previous.stage]))
               : previous?.completed ?? [],
+            ...(previous?.verdict ? { verdict: previous.verdict } : {}),
           }));
         } else if (event.type === 'delta') {
           setGenerationProgress((previous) => previous ? {
@@ -373,7 +375,15 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
             requestId: event.requestId,
             chars: event.chars,
             preview: event.preview,
-          } : previous);
+          } : {
+            requestId: event.requestId,
+            startedAt,
+            stage: 'streaming',
+            label: '正文正在生成',
+            chars: event.chars,
+            preview: event.preview,
+            completed: [],
+          });
         } else if (event.type === 'verify') {
           setGenerationProgress((previous) => previous ? {
             ...previous,
@@ -382,14 +392,17 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
         } else if (event.type === 'done') {
           completed = true;
           generatedMaster = event.md;
-          setGenerationProgress((previous) => previous ? {
-            ...previous,
+          setGenerationProgress((previous) => ({
             requestId: event.requestId,
+            startedAt: previous?.startedAt ?? startedAt,
             stage: 'done',
             label: `已生成并完成基础格式检查 · ${Math.max(1, Math.round(event.durationMs / 1000))} 秒`,
             detail: event.issues ? `发现 ${event.issues} 项编辑提醒，可在发布页查看` : '没有发现格式问题',
             chars: event.md.length,
-          } : previous);
+            preview: previous?.preview,
+            completed: previous?.completed ?? [],
+            ...(previous?.verdict ? { verdict: previous.verdict } : {}),
+          }));
           setContent(article.id, markdownToInlineHtml(event.md));
           setLanguage('zh');
           if (event.title) onTitle(event.title);
@@ -405,7 +418,14 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
         buffer = chunks.pop() ?? '';
         for (const chunk of chunks) {
           const data = chunk.split('\n').find((line) => line.startsWith('data: '))?.slice(6);
-          if (data) applyEvent(JSON.parse(data) as GenerationStreamEvent);
+          if (data) {
+            try {
+              applyEvent(JSON.parse(data) as GenerationStreamEvent);
+            } catch (parseError) {
+              // 单条事件损坏不能毁掉整条流——其余事件仍可能正常送达。
+              console.warn('[OmniWriter] 跳过无法解析的 SSE 事件:', parseError);
+            }
+          }
         }
         if (done) break;
       }

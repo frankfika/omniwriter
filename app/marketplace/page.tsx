@@ -115,13 +115,28 @@ export default function MarketplacePage() {
     if (saved) setNotice(`「${saved.name}」已保存到能力市场，和内置 Agent 一样可用来创作。`);
   };
 
-  const onDeleteCustom = (agent: CustomAgent) => {
-    if (!window.confirm(`删除自定义 Agent「${agent.name}」？此操作不可撤销。`)) return;
-    removeCustomAgent(agent.id);
-    clearAgentOverride(agent.id); // 连同该 Agent 的配置 override 一起清掉，不留孤儿数据
-    setCustomAgents(listCustomAgents());
-    setNotice(`已删除「${agent.name}」。`);
-  };
+  const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null);
+  const pendingDeleteTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(() => {
+    if (!pendingDeleteId) return;
+    const id = pendingDeleteId;
+    pendingDeleteTimer.current = setTimeout(() => setPendingDeleteId(null), 3000);
+    return () => {
+      if (pendingDeleteTimer.current) clearTimeout(pendingDeleteTimer.current);
+    };
+  }, [pendingDeleteId]);
+
+  const onDeleteCustom = React.useCallback((agent: CustomAgent) => {
+    if (pendingDeleteId === agent.id) {
+      removeCustomAgent(agent.id);
+      clearAgentOverride(agent.id); // 连同该 Agent 的配置 override 一起清掉，不留孤儿数据
+      setCustomAgents(listCustomAgents());
+      setNotice(`已删除「${agent.name}」。`);
+      setPendingDeleteId(null);
+      return;
+    }
+    setPendingDeleteId(agent.id);
+  }, [pendingDeleteId]);
 
   const normalized = query.trim().toLowerCase();
   const agents = mergeCustomAgents(AGENTS, customAgents).filter((agent) =>
@@ -236,6 +251,7 @@ export default function MarketplacePage() {
                           onUse={() => useAgent(agent)}
                           onConfigure={() => setConfiguring(agent)}
                           onDelete={agent.id.startsWith('custom-') ? () => onDeleteCustom(agent as CustomAgent) : undefined}
+                          deletePending={pendingDeleteId === agent.id}
                         />
                       ))}
                     </div>
@@ -360,7 +376,7 @@ function MarketTabButton({ active, onClick, icon, label }: { active: boolean; on
   );
 }
 
-function AgentMarketCard({ agent, override, onUse, onConfigure, onDelete }: { agent: WriterAgent; override?: AgentOverride; onUse: () => void; onConfigure: () => void; onDelete?: () => void }) {
+function AgentMarketCard({ agent, override, onUse, onConfigure, onDelete, deletePending }: { agent: WriterAgent; override?: AgentOverride; onUse: () => void; onConfigure: () => void; onDelete?: () => void; deletePending?: boolean }) {
   const isCustom = agent.id.startsWith('custom-');
   const customized = Boolean(override && (override.directive !== undefined || Object.keys(override.defaults ?? {}).length > 0));
   const effectiveVoice = override?.defaults?.voice ?? agent.defaults.voice ?? 'relaxed';
@@ -400,7 +416,7 @@ function AgentMarketCard({ agent, override, onUse, onConfigure, onDelete }: { ag
         <span className="text-[11px] text-ink-muted truncate pr-1">{agent.inputHint}</span>
         <div className="flex shrink-0 items-center gap-1.5">
           {onDelete && (
-            <Button size="sm" variant="ghost" onClick={onDelete} aria-label={`删除 ${agent.name}`} title="删除这个自定义 Agent"><Trash2 size={13}/></Button>
+            <Button size="sm" variant="ghost" onClick={onDelete} aria-label={deletePending ? `再次点击确认删除 ${agent.name}` : `删除 ${agent.name}`} title={deletePending ? '再次点击以确认删除（3 秒内有效）' : '删除这个自定义 Agent'} className={cn(deletePending && 'bg-red-50 text-red-600 ring-1 ring-red-200')}><Trash2 size={13}/></Button>
           )}
           <Button size="sm" variant="ghost" onClick={onConfigure} aria-label={`配置 ${agent.name}`} title="配置提示词和默认选项"><Settings2 size={13}/><span className="hidden sm:inline">配置</span></Button>
           <Button size="sm" onClick={onUse}><Sparkles size={13}/>用此流程创作</Button>
