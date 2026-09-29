@@ -100,7 +100,15 @@ export function AgentStudio({ onClose }: AgentStudioProps) {
     }
   };
 
+  const [saving, setSaving] = React.useState(false);
   const onSave = () => {
+    // 防双击：onClose 关弹窗是同步的但 React 提交需要一拍；fast double-click 会在两次
+    // 都还没 unmount 之前两次进 onSave，第二次 saveCustomAgent 用新的 UUID 写入，
+    // listCustomAgents() 第二次读时已经看到第一次写入的 agent 但只过滤自己的 id，于是
+    // 留下两条 id 不同的同名 Agent。
+    if (saving) return;
+    if (!directive.trim() || !name.trim()) return;
+    setSaving(true);
     const agent: CustomAgent = {
       id: `custom-${crypto.randomUUID()}`,
       emoji: emoji.trim() || '🧬',
@@ -283,7 +291,7 @@ export function AgentStudio({ onClose }: AgentStudioProps) {
 
         <div className="flex justify-end gap-2 border-t border-ink-line px-5 py-3.5">
           <Button variant="outline" size="md" onClick={() => onClose(null)}>取消</Button>
-          <Button size="md" onClick={onSave} disabled={!directive.trim() || !name.trim() || busy !== null}>保存 Agent</Button>
+          <Button size="md" onClick={onSave} disabled={!directive.trim() || !name.trim() || busy !== null || saving}>{saving ? '保存中…' : '保存 Agent'}</Button>
         </div>
       </div>
     </div>

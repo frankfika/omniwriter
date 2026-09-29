@@ -18,7 +18,7 @@ import { CREATOR_PLUGINS } from '@/src/lib/plugins';
 import { WRITING_STYLES } from '@/src/lib/styles';
 import { cn } from '@/components/ui/cn';
 import { WECHAT_TEMPLATES } from '@/src/lib/templates';
-import { createBackup, parseBackup } from '@/src/lib/backup';
+import { createBackup, parseBackup, restoreCustomAgents } from '@/src/lib/backup';
 import { useArticleStore } from '@/src/lib/store';
 import { downloadBlob } from '@/src/lib/export-html';
 
@@ -46,6 +46,7 @@ export default function SettingsPage() {
   const restoreArticles = useArticleStore((state) => state.restore);
   const backupInputRef = React.useRef<HTMLInputElement>(null);
   const [backupResult, setBackupResult] = React.useState<{ ok: boolean; message: string } | null>(null);
+  const [restoring, setRestoring] = React.useState(false);
 
   React.useEffect(() => { setCfg(loadConfig()); setAi(loadAiConfig()); hydrateArticles(); }, [hydrateArticles]);
 
@@ -94,8 +95,12 @@ export default function SettingsPage() {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
+    // 防连点：恢复期间文件选择按钮与「正在洗稿/正在生成」属于同一类 UX 风险。
+    if (restoring) return;
+    setRestoring(true);
     if (file.size > 20 * 1024 * 1024) {
       setBackupResult({ ok: false, message: '备份文件超过 20MB，请确认文件是否正确。' });
+      setRestoring(false);
       return;
     }
     try {
@@ -106,11 +111,22 @@ export default function SettingsPage() {
         saveConfig(nextConfig);
         setCfg(nextConfig);
       }
+      // 把备份里带的 custom Agents 写回 localStorage（saveCustomAgent 内部按 id 去重）。
+      if (backup.customAgents && backup.customAgents.length > 0) {
+        restoreCustomAgents(backup.customAgents);
+      }
       setBackupResult(restored.saved
-        ? { ok: true, message: `恢复完成：当前共 ${restored.total} 篇文章。重复稿件已按更新时间安全合并。` }
+        ? {
+            ok: true,
+            message: backup.customAgents && backup.customAgents.length > 0
+              ? `恢复完成：当前共 ${restored.total} 篇文章 + ${backup.customAgents.length} 个自定义 Agent。重复内容已按更新时间安全合并。`
+              : `恢复完成：当前共 ${restored.total} 篇文章。重复稿件已按更新时间安全合并。`,
+          }
         : { ok: false, message: '文章已读入，但浏览器存储空间不足，无法安全保存。请先保留备份文件并清理空间。' });
     } catch (error) {
       setBackupResult({ ok: false, message: (error as Error).message || '恢复失败，请检查备份文件。' });
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -191,7 +207,7 @@ export default function SettingsPage() {
 
           {tab === 'writing' && (
             <SettingsPanel title="写作默认值" description="Agent 会先使用自己的专业预设；没有指定时，再使用这些默认偏好。">
-              <Field label="默认风格"><Select aria-label="默认风格" value={cfg.voice} onChange={(event) => update({ voice: event.target.value as Voice, marketStyleId: event.target.value as Voice })}>{WRITING_STYLES.map((style) => <option key={style.id} value={style.id}>{style.name} · {style.tagline}</option>)}</Select></Field>
+              <Field label="默认风格"><Select aria-label="默认风格" value={cfg.voice} onChange={(event) => update({ voice: event.target.value as Voice })}>{WRITING_STYLES.map((style) => <option key={style.id} value={style.id}>{style.name} · {style.tagline}</option>)}</Select></Field>
               <label className="flex items-center gap-2 text-sm text-ink-soft"><input type="checkbox" checked={cfg.bilingual} onChange={(event) => update({ bilingual: event.target.checked })} className="h-4 w-4 accent-ink"/>默认生成中英双语</label>
               <Field label="系列标题前缀"><Input aria-label="系列标题前缀" value={cfg.seriesTitle} onChange={(event) => update({ seriesTitle: event.target.value })} placeholder="如 Vibe Coding｜；留空则不用"/></Field>
               <Field label="作者署名"><Input aria-label="作者署名" value={cfg.authorSignature} onChange={(event) => update({ authorSignature: event.target.value })} placeholder="如 陈放 Frank"/></Field>
@@ -234,11 +250,11 @@ export default function SettingsPage() {
                   <div className="size-11 shrink-0 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center"><ShieldCheck size={20}/></div>
                   <div className="min-w-0 flex-1">
                     <h2 className="text-base font-semibold mb-1">稿件可带走，也可恢复</h2>
-                    <p className="text-xs leading-relaxed text-ink-muted">当前浏览器保存了 {articles.length} 篇文章。备份包含文章、平台稿、模板与创作偏好，不包含 API Key。</p>
+                    <p className="text-xs leading-relaxed text-ink-muted">当前浏览器保存了 {articles.length} 篇文章。备份包含文章、平台稿、模板、创作偏好，以及你自己孵化的写作 Agent，不包含 API Key。</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button onClick={exportBackup} variant="primary"><Download size={14}/>导出全部备份</Button>
-                    <Button onClick={() => backupInputRef.current?.click()} variant="outline"><Upload size={14}/>恢复备份</Button>
+                    <Button onClick={exportBackup} variant="primary" disabled={restoring}><Download size={14}/>导出全部备份</Button>
+                    <Button onClick={() => backupInputRef.current?.click()} variant="outline" disabled={restoring}><Upload size={14}/>{restoring ? '恢复中…' : '恢复备份'}</Button>
                     <input ref={backupInputRef} type="file" accept="application/json,.json" onChange={importBackup} className="sr-only" aria-label="选择 OmniWriter 备份文件"/>
                   </div>
                 </div>

@@ -131,10 +131,16 @@ export const useArticleStore = create<Store>((set, get) => ({
     set({ articles, hydrated: true, corrupted: corruptRaw !== null });
   },
   // 用户明确选择丢弃损坏数据后再恢复正常写盘。
+  // 修复点：必须先 saveAll 成功再清掉 corruptRaw —— 否则配额满写失败时，
+  // corruptRaw 已经为 null，但 localStorage 仍是损坏串，下次 hydrate 又会复现 banner。
   discardCorrupt: () => {
-    corruptRaw = null;
     const ok = saveAll(get().articles);
-    set({ corrupted: false, saveState: ok ? 'saved' : 'error' });
+    if (!ok) {
+      set({ saveState: 'error' });
+      return;
+    }
+    corruptRaw = null;
+    set({ corrupted: false, saveState: 'saved' });
   },
   flush: () => flushPendingSave(),
   create: (brief) => {
