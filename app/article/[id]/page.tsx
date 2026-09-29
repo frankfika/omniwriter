@@ -350,9 +350,10 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
       let buffer = '';
       let completed = false;
       const applyEvent = (event: GenerationStreamEvent) => {
-        // 只接受本请求的 SSE 事件：拒绝迟到/串流的旧请求（重启或上一轮 done 的残余），
-        // 避免旧事件把刚开始的生成进度或正文覆盖掉。
-        if (event.requestId && event.requestId !== localRequestId) return;
+        // 服务端会在每个事件上附带 requestId；旧过滤在客户端另起一个 UUID
+        // 然后和服务端的对比——两端互不可见，所以会丢掉所有事件。
+        // AbortController + 循环退出已经天然挡住串流旧请求，这里直接放过即可。
+        console.log('[DBG] applyEvent', event.type, 'chars=', (event as { chars?: number }).chars);
         if (event.type === 'stage') {
           setGenerationProgress((previous) => ({
             requestId: event.requestId,
@@ -383,6 +384,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
           generatedMaster = event.md;
           setGenerationProgress((previous) => previous ? {
             ...previous,
+            requestId: event.requestId,
             stage: 'done',
             label: `已生成并完成基础格式检查 · ${Math.max(1, Math.round(event.durationMs / 1000))} 秒`,
             detail: event.issues ? `发现 ${event.issues} 项编辑提醒，可在发布页查看` : '没有发现格式问题',
