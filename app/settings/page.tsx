@@ -18,7 +18,7 @@ import { CREATOR_PLUGINS } from '@/src/lib/plugins';
 import { WRITING_STYLES } from '@/src/lib/styles';
 import { cn } from '@/components/ui/cn';
 import { WECHAT_TEMPLATES } from '@/src/lib/templates';
-import { createBackup, parseBackup, restoreCustomAgents } from '@/src/lib/backup';
+import { createBackup, parseBackup, reconcileAgentOverrides, restoreCustomAgents } from '@/src/lib/backup';
 import { useArticleStore } from '@/src/lib/store';
 import { downloadBlob } from '@/src/lib/export-html';
 
@@ -106,14 +106,18 @@ export default function SettingsPage() {
     try {
       const backup = parseBackup(await file.text());
       const restored = restoreArticles(backup.articles);
-      if (backup.config) {
-        const nextConfig = { ...DEFAULT_CONFIG, ...backup.config };
-        saveConfig(nextConfig);
-        setCfg(nextConfig);
-      }
       // 把备份里带的 custom Agents 写回 localStorage（saveCustomAgent 内部按 id 去重）。
+      // 注意顺序：先 restore CustomAgents 再 reconcile overrides，让调和时能拿到完整 id 集。
       if (backup.customAgents && backup.customAgents.length > 0) {
         restoreCustomAgents(backup.customAgents);
+      }
+      if (backup.config) {
+        const nextConfig = reconcileAgentOverrides(
+          { ...DEFAULT_CONFIG, ...backup.config },
+          backup.customAgents ?? [],
+        );
+        saveConfig(nextConfig);
+        setCfg(nextConfig);
       }
       setBackupResult(restored.saved
         ? {
@@ -207,22 +211,25 @@ export default function SettingsPage() {
 
           {tab === 'writing' && (
             <SettingsPanel title="写作默认值" description="Agent 会先使用自己的专业预设；没有指定时，再使用这些默认偏好。">
-              <Field label="默认风格"><Select aria-label="默认风格" value={cfg.voice} onChange={(event) => update({ voice: event.target.value as Voice })}>{WRITING_STYLES.map((style) => <option key={style.id} value={style.id}>{style.name} · {style.tagline}</option>)}</Select></Field>
+              <Field label="默认风格" onReset={() => update({ voice: DEFAULT_CONFIG.voice })}><Select aria-label="默认风格" value={cfg.voice} onChange={(event) => update({ voice: event.target.value as Voice })}>{WRITING_STYLES.map((style) => <option key={style.id} value={style.id}>{style.name} · {style.tagline}</option>)}</Select></Field>
               <label className="flex items-center gap-2 text-sm text-ink-soft"><input type="checkbox" checked={cfg.bilingual} onChange={(event) => update({ bilingual: event.target.checked })} className="h-4 w-4 accent-ink"/>默认生成中英双语</label>
-              <Field label="系列标题前缀"><Input aria-label="系列标题前缀" value={cfg.seriesTitle} onChange={(event) => update({ seriesTitle: event.target.value })} placeholder="如 Vibe Coding｜；留空则不用"/></Field>
-              <Field label="作者署名"><Input aria-label="作者署名" value={cfg.authorSignature} onChange={(event) => update({ authorSignature: event.target.value })} placeholder="如 陈放 Frank"/></Field>
+              <Field label="系列标题前缀" onReset={() => update({ seriesTitle: '' })}><Input aria-label="系列标题前缀" value={cfg.seriesTitle} onChange={(event) => update({ seriesTitle: event.target.value })} placeholder="如 Vibe Coding｜；留空则不用"/></Field>
+              <Field label="作者署名" onReset={() => update({ authorSignature: '' })}><Input aria-label="作者署名" value={cfg.authorSignature} onChange={(event) => update({ authorSignature: event.target.value })} placeholder="如 陈放 Frank"/></Field>
             </SettingsPanel>
           )}
 
           {tab === 'publishing' && (
             <div className="space-y-4">
               <SettingsPanel title="默认发布平台" description="新建空白文章时默认选中；Agent 仍会根据任务给出更合适的平台组合。">
-                <div className="flex flex-wrap gap-1.5">{PLATFORM_ORDER.map((platform) => <button key={platform} onClick={() => togglePlatform(platform)} className={cn('h-10 px-3 rounded-full text-sm border transition-colors sm:h-7 sm:px-2.5 sm:text-xs', cfg.defaultPlatforms.includes(platform) ? 'bg-ink text-white border-ink' : 'bg-white text-ink-soft border-ink-line hover:border-ink')}>{PLATFORMS[platform].label}</button>)}</div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-wrap gap-1.5">{PLATFORM_ORDER.map((platform) => <button key={platform} onClick={() => togglePlatform(platform)} className={cn('h-10 px-3 rounded-full text-sm border transition-colors sm:h-7 sm:px-2.5 sm:text-xs', cfg.defaultPlatforms.includes(platform) ? 'bg-ink text-white border-ink' : 'bg-white text-ink-soft border-ink-line hover:border-ink')}>{PLATFORMS[platform].label}</button>)}</div>
+                  <button type="button" onClick={() => update({ defaultPlatforms: [...DEFAULT_CONFIG.defaultPlatforms] })} className="text-[11px] text-indigo-700 hover:underline shrink-0">恢复默认</button>
+                </div>
               </SettingsPanel>
               <SettingsPanel title="公众号排版" description="应用到实时预览、富文本复制和离线发布包。">
-                <Field label="默认模板"><Select aria-label="默认模板" value={cfg.defaultTemplateId} onChange={(event) => update({ defaultTemplateId: event.target.value })}>{WECHAT_TEMPLATES.map((template) => <option key={template.id} value={template.id}>{template.name} · {template.tagline}</option>)}</Select></Field>
-                <Field label="普通文章 Eyebrow"><Input aria-label="普通文章 Eyebrow" value={cfg.wechatEyebrow} onChange={(event) => update({ wechatEyebrow: event.target.value })}/></Field>
-                <Field label="新闻文章 Eyebrow"><Input aria-label="新闻文章 Eyebrow" value={cfg.newsEyebrow} onChange={(event) => update({ newsEyebrow: event.target.value })}/></Field>
+                <Field label="默认模板" onReset={() => update({ defaultTemplateId: DEFAULT_CONFIG.defaultTemplateId })}><Select aria-label="默认模板" value={cfg.defaultTemplateId} onChange={(event) => update({ defaultTemplateId: event.target.value })}>{WECHAT_TEMPLATES.map((template) => <option key={template.id} value={template.id}>{template.name} · {template.tagline}</option>)}</Select></Field>
+                <Field label="普通文章 Eyebrow" onReset={() => update({ wechatEyebrow: DEFAULT_CONFIG.wechatEyebrow })}><Input aria-label="普通文章 Eyebrow" value={cfg.wechatEyebrow} onChange={(event) => update({ wechatEyebrow: event.target.value })}/></Field>
+                <Field label="新闻文章 Eyebrow" onReset={() => update({ newsEyebrow: DEFAULT_CONFIG.newsEyebrow })}><Input aria-label="新闻文章 Eyebrow" value={cfg.newsEyebrow} onChange={(event) => update({ newsEyebrow: event.target.value })}/></Field>
               </SettingsPanel>
             </div>
           )}
@@ -280,6 +287,16 @@ function SettingsPanel({ title, description, children }: { title: string; descri
   return <section className="rounded-xl border border-ink-line bg-white p-5 sm:p-6"><h2 className="text-base font-semibold tracking-tightish mb-1">{title}</h2><p className="text-xs leading-relaxed text-ink-muted mb-5">{description}</p><div className="max-w-xl space-y-4">{children}</div></section>;
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div><label className="block text-xs font-medium text-ink-soft mb-1.5">{label}</label>{children}</div>;
+function Field({ label, children, onReset }: { label: string; children: React.ReactNode; onReset?: () => void }) {
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <label className="block text-xs font-medium text-ink-soft">{label}</label>
+        {onReset && (
+          <button type="button" onClick={onReset} className="text-[11px] text-indigo-700 hover:underline">恢复默认</button>
+        )}
+      </div>
+      {children}
+    </div>
+  );
 }

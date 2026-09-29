@@ -46,15 +46,30 @@ export function AgentStudio({ onClose }: AgentStudioProps) {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [history, trialArticle]);
 
+  const tuneAbortRef = React.useRef<AbortController | null>(null);
+  // 卸载 / 主动关闭时打断所有飞行中的 /api/agents/tune 请求，避免在已 unmount 的
+  // 组件上 setDirective / setHistory（开发环境 React 18 会有警告，生产环境也是无意义的请求）。
+  React.useEffect(() => () => tuneAbortRef.current?.abort(), []);
+
   const callTune = async (body: Record<string, unknown>) => {
-    const res = await fetch('/api/agents/tune', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ...body, ai: loadAiConfig() }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-    return data;
+    // 一次只跑一个 tune：来新请求前先 abort 旧的，避免连点「开始提炼 / 反馈改稿」
+    // 让旧响应覆盖新响应。
+    tuneAbortRef.current?.abort();
+    const ac = new AbortController();
+    tuneAbortRef.current = ac;
+    try {
+      const res = await fetch('/api/agents/tune', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...body, ai: loadAiConfig() }),
+        signal: ac.signal,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      return data;
+    } finally {
+      if (tuneAbortRef.current === ac) tuneAbortRef.current = null;
+    }
   };
 
   const revise = async (userFeedback?: string) => {
@@ -79,6 +94,8 @@ export function AgentStudio({ onClose }: AgentStudioProps) {
       }
       setFeedback('');
     } catch (e) {
+      // AbortError 静默：用户主动关闭弹窗，不算错误
+      if ((e as Error).name === 'AbortError') return;
       setError((e as Error).message);
     } finally {
       setBusy(null);
@@ -94,6 +111,7 @@ export function AgentStudio({ onClose }: AgentStudioProps) {
       const data = await callTune({ action: 'trial', directive, material });
       setTrialArticle(data.article);
     } catch (e) {
+      if ((e as Error).name === 'AbortError') return;
       setError((e as Error).message);
     } finally {
       setBusy(null);

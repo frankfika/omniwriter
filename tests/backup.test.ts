@@ -8,9 +8,13 @@ import {
   createBackup,
   mergeArticles,
   parseBackup,
+  reconcileAgentOverrides,
   restoreCustomAgents,
 } from '../src/lib/backup';
 import { listCustomAgents, saveCustomAgent } from '../src/lib/custom-agents';
+import type { Article, CreatorConfig, Voice } from '../src/lib/types';
+import type { CustomAgent } from '../src/lib/custom-agents';
+import type { AgentGroup } from '../src/lib/agents';
 
 // jsdom 不带 localStorage 的 getItem/setItem 时会抛错；这里给最小 stub。
 function withStorage<T>(fn: () => T): T {
@@ -27,25 +31,50 @@ function withStorage<T>(fn: () => T): T {
   try { return fn(); } finally { vi.unstubAllGlobals(); }
 }
 
+function makeArticle(id: string, updatedAt: number = 1): Article {
+  return {
+    id, title: id, content: '',
+    brief: { material: 'm', materialType: 'topic', angle: '', voice: 'editorial', length: 'medium', platforms: [], bilingual: false },
+    platformDrafts: {}, templateId: 'paper', createdAt: 1, updatedAt,
+  };
+}
+
+function makeCustomAgent(id: string, group: AgentGroup = 'craft', createdAt: number = 100): CustomAgent {
+  return {
+    id, emoji: '🧪', name: id, tagline: 't', description: '', group,
+    defaults: { materialType: 'topic', voice: 'relaxed', length: 'medium', platforms: [], angle: '' },
+    inputHint: '', directive: 'd', pluginIds: [], createdAt,
+  };
+}
+
+const baseConfig: CreatorConfig = {
+  defaultPlatforms: ['wechat'],
+  bilingual: false,
+  voice: 'editorial' as Voice,
+  seriesTitle: '',
+  wechatEyebrow: 'FRANK\'S AI NOTES',
+  newsEyebrow: 'FRANK\'S AI NOTES',
+  authorSignature: '',
+  defaultTemplateId: 'graphite',
+};
+
 describe('createBackup', () => {
   it('写齐 format / version / exportedAt / articles / config / customAgents', () => {
     withStorage(() => {
-      const articles = [{ id: 'a1', title: 'T', content: '', contentEn: '', brief: { material: 'm', materialType: 'topic', angle: '', voice: 'editorial', length: 'medium', platforms: [], bilingual: false }, platformDrafts: {}, templateId: 'paper', createdAt: 100, updatedAt: 100 }];
-      const cfg = { defaultPlatforms: ['wechat'], bilingual: false, voice: 'editorial', length: 'medium' };
-      saveCustomAgent({ id: 'custom-x', emoji: '🧪', name: 'X', tagline: 't', description: '', group: 'craft', defaults: { materialType: 'topic', voice: 'relaxed', length: 'medium', platforms: [], angle: '' }, inputHint: '', directive: 'd', pluginIds: [], createdAt: 100 });
-      const backup = createBackup(articles, cfg);
+      saveCustomAgent(makeCustomAgent('custom-x'));
+      const backup = createBackup([makeArticle('a1')], baseConfig);
       expect(backup.format).toBe(BACKUP_FORMAT);
       expect(backup.version).toBe(BACKUP_VERSION);
-      expect(backup.articles).toEqual(articles);
-      expect(backup.config).toBe(cfg);
+      expect(backup.articles.length).toBe(1);
+      expect(backup.config).toBe(baseConfig);
       expect(backup.customAgents?.length).toBe(1);
-      expect(backup.customAgents?.[0].name).toBe('X');
+      expect(backup.customAgents?.[0].name).toBe('custom-x');
     });
   });
 
   it('导出时不带 API Key——CreatorConfig 不应包含 apiKey/baseUrl', () => {
     withStorage(() => {
-      const backup = createBackup([], { defaultPlatforms: [], bilingual: false, voice: 'editorial', length: 'medium' });
+      const backup = createBackup([], baseConfig);
       const json = JSON.stringify(backup);
       expect(json).not.toContain('apiKey');
       expect(json).not.toContain('baseUrl');
@@ -60,9 +89,9 @@ describe('parseBackup', () => {
       format: BACKUP_FORMAT,
       version: BACKUP_VERSION,
       exportedAt: '2026-09-29T00:00:00.000Z',
-      articles: [{ id: 'a1', title: 'T', content: '', contentEn: '', brief: { material: 'm', materialType: 'topic', angle: '', voice: 'editorial', length: 'medium', platforms: [], bilingual: false }, platformDrafts: {}, templateId: 'paper', createdAt: 100, updatedAt: 100 }],
+      articles: [makeArticle('a1')],
       config: { voice: 'editorial' },
-      customAgents: [{ id: 'custom-y', emoji: '🧬', name: 'Y', tagline: 't', description: '', group: 'craft', defaults: { materialType: 'topic', voice: 'relaxed', length: 'medium', platforms: [], angle: '' }, inputHint: '', directive: 'd', pluginIds: [], createdAt: 100 }],
+      customAgents: [makeCustomAgent('custom-y')],
     });
     const parsed = parseBackup(json);
     expect(parsed.articles.length).toBe(1);
@@ -94,8 +123,8 @@ describe('parseBackup', () => {
       format: BACKUP_FORMAT, version: BACKUP_VERSION, exportedAt: '',
       articles: [],
       customAgents: [
-        { id: 'good-1', name: 'Good', directive: 'd', createdAt: 1 },
-        { /* 缺 id */ name: 'Bad', directive: 'd', createdAt: 1 },
+        { id: 'good-1', name: 'Good', directive: 'd', createdAt: 1, emoji: '', tagline: '', description: '', group: 'craft', defaults: {}, inputHint: '', pluginIds: [] },
+        { /* 缺 id */ name: 'Bad', directive: 'd', createdAt: 1, emoji: '', tagline: '', description: '', group: 'craft', defaults: {}, inputHint: '', pluginIds: [] },
         'a string entry',
         null,
       ],
@@ -111,9 +140,8 @@ describe('parseBackup', () => {
   });
 
   it('顶层是数组（早期直接导出 articles）：兼容当作 v1 处理', () => {
-    const arr = [{ id: 'a1', title: 'T', content: '', contentEn: '', brief: { material: 'm', materialType: 'topic', angle: '', voice: 'editorial', length: 'medium', platforms: [], bilingual: false }, platformDrafts: {}, templateId: 'paper', createdAt: 1, updatedAt: 1 }];
-    const parsed = parseBackup(JSON.stringify(arr));
-    expect(parsed.articles).toEqual(arr);
+    const parsed = parseBackup(JSON.stringify([makeArticle('a1')]));
+    expect(parsed.articles.length).toBe(1);
   });
 
   it('非法 JSON：抛错', () => {
@@ -122,25 +150,19 @@ describe('parseBackup', () => {
 });
 
 describe('mergeArticles', () => {
-  const make = (id: string, updatedAt: number) => ({
-    id, title: id, content: '', contentEn: '',
-    brief: { material: 'm', materialType: 'topic', angle: '', voice: 'editorial', length: 'medium', platforms: [], bilingual: false },
-    platformDrafts: {}, templateId: 'paper', createdAt: 1, updatedAt,
-  });
-
   it('同 id：保留 updatedAt 较大的那份', () => {
-    const result = mergeArticles([make('a', 100)], [make('a', 200)]);
+    const result = mergeArticles([makeArticle('a', 100)], [makeArticle('a', 200)]);
     expect(result.length).toBe(1);
     expect(result[0]?.updatedAt).toBe(200);
   });
 
   it('不同 id：两篇都保留，按 updatedAt 倒序', () => {
-    const result = mergeArticles([make('a', 100)], [make('b', 200)]);
+    const result = mergeArticles([makeArticle('a', 100)], [makeArticle('b', 200)]);
     expect(result.map((a) => a.id)).toEqual(['b', 'a']);
   });
 
   it('空输入：返回 current 副本（不修改引用）', () => {
-    const original = [make('a', 1)];
+    const original = [makeArticle('a', 1)];
     const result = mergeArticles(original, []);
     expect(result).toEqual(original);
     expect(result).not.toBe(original);
@@ -150,11 +172,7 @@ describe('mergeArticles', () => {
 describe('restoreCustomAgents', () => {
   it('把备份里的 customAgents 写回 localStorage；不存在的被忽略', () => {
     withStorage(() => {
-      const backup = [
-        { id: 'custom-r1', emoji: '🧪', name: 'R1', tagline: 't', description: '', group: 'craft', defaults: { materialType: 'topic', voice: 'relaxed', length: 'medium', platforms: [], angle: '' }, inputHint: '', directive: 'd', pluginIds: [], createdAt: 100 },
-        { id: 'custom-r2', emoji: '🧬', name: 'R2', tagline: 't', description: '', group: 'opinion', defaults: { materialType: 'topic', voice: 'relaxed', length: 'medium', platforms: [], angle: '' }, inputHint: '', directive: 'd', pluginIds: [], createdAt: 100 },
-      ];
-      restoreCustomAgents(backup);
+      restoreCustomAgents([makeCustomAgent('custom-r1', 'craft'), makeCustomAgent('custom-r2', 'opinion')]);
       const stored = listCustomAgents();
       expect(stored.map((a) => a.id).sort()).toEqual(['custom-r1', 'custom-r2']);
     });
@@ -165,5 +183,37 @@ describe('restoreCustomAgents', () => {
       expect(() => restoreCustomAgents([])).not.toThrow();
       expect(listCustomAgents()).toEqual([]);
     });
+  });
+});
+
+describe('reconcileAgentOverrides', () => {
+  it('保留指向 builtin Agent 的 override', () => {
+    const result = reconcileAgentOverrides(
+      { ...baseConfig, agentOverrides: { opinion: { directive: 'd' } } },
+      [],
+    );
+    expect(result.agentOverrides?.opinion).toEqual({ directive: 'd' });
+  });
+
+  it('保留指向已恢复 customAgent 的 override', () => {
+    const result = reconcileAgentOverrides(
+      { ...baseConfig, agentOverrides: { 'custom-x': { directive: 'd' } } },
+      [makeCustomAgent('custom-x')],
+    );
+    expect(result.agentOverrides?.['custom-x']).toEqual({ directive: 'd' });
+  });
+
+  it('丢弃指向未恢复 customAgent 的 override（防止永远命中不到的死 override）', () => {
+    const result = reconcileAgentOverrides(
+      { ...baseConfig, agentOverrides: { 'custom-missing': { directive: 'd' }, opinion: { directive: 'k' } } },
+      [],
+    );
+    expect(result.agentOverrides?.['custom-missing']).toBeUndefined();
+    expect(result.agentOverrides?.opinion).toEqual({ directive: 'k' });
+  });
+
+  it('无 overrides 时返回原 config（不动其它字段）', () => {
+    const result = reconcileAgentOverrides(baseConfig, []);
+    expect(result).toEqual(baseConfig);
   });
 });

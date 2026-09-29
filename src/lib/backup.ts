@@ -2,6 +2,7 @@ import type { Article, CreatorConfig } from './types';
 import { DEFAULT_CONFIG } from './config';
 import type { CustomAgent } from './custom-agents';
 import { listCustomAgents, saveCustomAgent } from './custom-agents';
+import { AGENTS } from './agents';
 
 export const BACKUP_FORMAT = 'omniwriter-backup' as const;
 export const BACKUP_VERSION = 1 as const;
@@ -69,6 +70,25 @@ export function parseBackup(raw: string): OmniWriterBackup {
 // 重复 id 会被 saveCustomAgent 内部去重（listCustomAgents().filter(id !== agent.id)）。
 export function restoreCustomAgents(agents: CustomAgent[]): void {
   for (const agent of agents) saveCustomAgent(agent);
+}
+
+// 备份里的 agentOverrides 可能引用「已在 builtin 里被移除 / 自定义没恢复」的 Agent，
+// 把它们原样写回去会出现「永远命中不到的 override」。一次性调平，避免用户困惑。
+export function reconcileAgentOverrides(
+  config: CreatorConfig,
+  restoredCustomAgents: CustomAgent[],
+): CreatorConfig {
+  const overrides = config.agentOverrides;
+  if (!overrides || Object.keys(overrides).length === 0) return config;
+  const validIds = new Set<string>([
+    ...AGENTS.map((agent) => agent.id),
+    ...restoredCustomAgents.map((agent) => agent.id),
+  ]);
+  const filtered: Record<string, typeof overrides[string]> = {};
+  for (const [id, patch] of Object.entries(overrides)) {
+    if (validIds.has(id)) filtered[id] = patch;
+  }
+  return { ...config, agentOverrides: filtered };
 }
 
 export function mergeArticles(current: Article[], incoming: Article[]): Article[] {
