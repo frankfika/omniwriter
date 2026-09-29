@@ -314,7 +314,7 @@ function PlatformBody({
                         setCopiedImage(index);
                         setTimeout(() => setCopiedImage(null), 1800);
                       }}
-                      className="inline-flex h-10 flex-1 items-center justify-center gap-1 rounded border border-ink-line text-[11px] text-ink-soft hover:bg-ink-panel sm:h-8"
+                      className="inline-flex h-10 min-w-10 flex-1 items-center justify-center gap-1 rounded border border-ink-line text-[11px] text-ink-soft hover:bg-ink-panel sm:h-8 sm:min-w-0"
                     >
                       {copiedImage === index ? <Check size={11}/> : <Copy size={11}/>}
                       {copiedImage === index ? '已复制' : '复制'}

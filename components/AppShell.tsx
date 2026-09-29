@@ -18,6 +18,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const remove = useArticleStore((s) => s.remove);
   const flush = useArticleStore((s) => s.flush);
   const visibleArticles = articles.slice(0, 8);
+  const [pendingDelete, setPendingDelete] = React.useState<string | null>(null);
+  const pendingDeleteRef = React.useRef<string | null>(null);
+  pendingDeleteRef.current = pendingDelete;
+
+  React.useEffect(() => {
+    if (!pendingDelete) return;
+    const timer = window.setTimeout(() => setPendingDelete(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [pendingDelete]);
+
+  const requestDelete = React.useCallback((id: string, title: string) => {
+    if (pendingDeleteRef.current === id) {
+      remove(id);
+      setPendingDelete(null);
+      if (pathname === `/article/${id}`) router.push('/');
+      return;
+    }
+    setPendingDelete(id);
+  }, [pathname, remove, router]);
 
   React.useEffect(() => { hydrate(); }, [hydrate]);
 
@@ -107,16 +126,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <button
                     onClick={(e) => {
                       e.preventDefault();
-                      if (confirm(`删除 "${a.title || '未命名'}"？`)) {
-                        remove(a.id);
-                        if (active) router.push('/');
-                      }
+                      e.stopPropagation();
+                      requestDelete(a.id, a.title || '未命名');
                     }}
-                    aria-label={`删除 ${a.title || '未命名'}`}
-                    className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded text-ink-muted hover:text-red-600 hover:bg-red-50 lg:opacity-0 lg:group-hover:opacity-100"
-                    title="删除"
+                    aria-label={pendingDelete === a.id ? `确认删除 ${a.title || '未命名'}（再次点击）` : `删除 ${a.title || '未命名'}`}
+                    className={cn(
+                      'absolute right-1 top-1/2 -translate-y-1/2 inline-flex min-h-10 min-w-10 items-center justify-center gap-1 rounded text-ink-muted hover:text-red-600 hover:bg-red-50 sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0',
+                      pendingDelete === a.id && 'bg-red-50 text-red-600 ring-1 ring-red-200',
+                      pendingDelete !== a.id && 'lg:opacity-0 lg:group-hover:opacity-100',
+                    )}
+                    title={pendingDelete === a.id ? '再次点击以确认删除（3 秒内有效）' : '删除'}
                   >
                     <Trash2 size={13}/>
+                    {pendingDelete === a.id && <span className="ml-0.5 text-[10px] font-medium">确认</span>}
                   </button>
                 </li>
               );
@@ -145,15 +167,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex flex-col min-w-0">
         {/* 移动端顶栏 */}
         <div className="xl:hidden flex items-center justify-between gap-3 px-4 h-12 border-b border-white/80 bg-white/80 backdrop-blur-xl shrink-0">
-          <Link href="/" className="h-10 shrink-0 font-semibold tracking-tightish inline-flex items-center gap-2"><span className="size-5 rounded-md bg-gradient-to-br from-slate-900 to-indigo-600"/>OmniWriter</Link>
+          <Link href="/" className="inline-flex h-11 shrink-0 items-center gap-2 px-2 font-semibold tracking-tightish sm:h-8"><span className="size-5 rounded-md bg-gradient-to-br from-slate-900 to-indigo-600"/>OmniWriter</Link>
           <div className="flex items-center gap-1 sm:gap-3 text-sm">
-            <Link href="/" aria-label="创作台" title="创作台" className={cn('h-10 w-10 p-0 sm:h-8 sm:w-auto sm:px-2 inline-flex items-center justify-center gap-1 rounded-md hover:bg-white hover:text-ink', pathname === '/' ? 'bg-white text-indigo-700' : 'text-ink-muted')}>
+            <Link href="/" aria-label="创作台" title="创作台" className={cn('h-11 w-11 p-0 sm:h-8 sm:w-auto sm:px-2 inline-flex items-center justify-center gap-1 rounded-md hover:bg-white hover:text-ink', pathname === '/' ? 'bg-white text-indigo-700' : 'text-ink-muted')}>
               <PenLine size={14}/><span className="hidden sm:inline">创作</span>
             </Link>
-            <Link href="/marketplace" aria-label="能力市场" title="能力市场" className="h-10 w-10 p-0 sm:h-8 sm:w-auto sm:px-2 inline-flex items-center justify-center gap-1 rounded-md hover:bg-white hover:text-ink text-ink-muted">
+            <Link href="/marketplace" aria-label="能力市场" title="能力市场" className="h-11 w-11 p-0 sm:h-8 sm:w-auto sm:px-2 inline-flex items-center justify-center gap-1 rounded-md hover:bg-white hover:text-ink text-ink-muted">
               <Blocks size={14}/><span className="hidden sm:inline">市场</span>
             </Link>
-            <Link href="/settings" aria-label="设置" title="设置" className="h-10 w-10 p-0 sm:h-8 sm:w-auto sm:px-2 inline-flex items-center justify-center gap-1 rounded-md hover:bg-white hover:text-ink text-ink-muted">
+            <Link href="/settings" aria-label="设置" title="设置" className="h-11 w-11 p-0 sm:h-8 sm:w-auto sm:px-2 inline-flex items-center justify-center gap-1 rounded-md hover:bg-white hover:text-ink text-ink-muted">
               <Settings size={14}/><span className="hidden sm:inline">设置</span>
             </Link>
           </div>

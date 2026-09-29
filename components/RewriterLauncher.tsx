@@ -164,18 +164,21 @@ export function RewriterLauncher({ compact = false }: { compact?: boolean }) {
 
         <div className="mt-5 grid gap-4 sm:grid-cols-[1fr_auto] sm:items-stretch">
           <input
+            id="rewriter-url"
             type="url"
+            inputMode="url"
             value={url}
             onChange={(event) => { setUrl(event.target.value); setError(null); }}
             onKeyDown={(event) => { if (event.key === 'Enter') void submit(); }}
             placeholder="https://x.com/... / https://github.com/owner/repo / 新闻链接"
-            className="w-full rounded-xl border border-ink-line/80 bg-white px-4 py-3 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            aria-label="待改写的链接（X、新闻或 GitHub）"
+            className="w-full min-h-10 rounded-xl border border-ink-line/80 bg-white px-4 py-3 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
           />
           <button
             type="button"
             onClick={() => void submit()}
             disabled={!url.trim() || loading}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-slate-900 to-indigo-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:shadow-md disabled:pointer-events-none disabled:opacity-40"
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-slate-900 to-indigo-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:shadow-md disabled:pointer-events-none disabled:opacity-40"
           >
             {loading ? <Loader2 size={16} className="animate-spin"/> : <Wand2 size={16}/>}
             {loading ? '正在改写…' : '开始洗稿'}
@@ -192,12 +195,14 @@ export function RewriterLauncher({ compact = false }: { compact?: boolean }) {
                   type="button"
                   onClick={() => setTarget(option.id)}
                   className={cn(
-                    'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors',
+                    'inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 sm:min-h-0 sm:py-1.5 text-xs transition-colors',
                     target === option.id
                       ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
                       : 'border-ink-line/70 bg-white text-ink-soft hover:border-indigo-200 hover:text-indigo-700',
                   )}
                   title={option.helper}
+                  aria-label={`目标平台：${option.label}（${option.helper}）`}
+                  aria-pressed={target === option.id}
                 >
                   <span>{option.emoji}</span>{option.label}
                 </button>
@@ -213,12 +218,14 @@ export function RewriterLauncher({ compact = false }: { compact?: boolean }) {
                   type="button"
                   onClick={() => setVoice(option.id)}
                   className={cn(
-                    'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors',
+                    'inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 sm:min-h-0 sm:py-1.5 text-xs transition-colors',
                     voice === option.id
                       ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
                       : 'border-ink-line/70 bg-white text-ink-soft hover:border-indigo-200 hover:text-indigo-700',
                   )}
                   title={option.helper}
+                  aria-label={`语气：${option.label}（${option.helper}）`}
+                  aria-pressed={voice === option.id}
                 >
                   {option.label}
                 </button>
@@ -228,12 +235,14 @@ export function RewriterLauncher({ compact = false }: { compact?: boolean }) {
         </div>
 
         <div className="mt-3">
-          <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-ink-muted">额外诉求（可选）</label>
+          <label htmlFor="rewriter-intent" className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-ink-muted">额外诉求（可选）</label>
           <input
+            id="rewriter-intent"
             value={intent}
             onChange={(event) => setIntent(event.target.value)}
             placeholder="例如：突出公司股价、保留原始链接、加一句我个人评论"
-            className="w-full rounded-xl border border-ink-line/80 bg-white px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            aria-label="额外诉求（可选）"
+            className="w-full min-h-10 rounded-xl border border-ink-line/80 bg-white px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
           />
         </div>
 
@@ -266,7 +275,7 @@ export function RewriterLauncher({ compact = false }: { compact?: boolean }) {
               type="button"
               onClick={() => void handleGithubSearch()}
               disabled={githubSearching}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-ink-line bg-white px-4 py-2 text-sm font-medium text-ink hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-50"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-ink-line bg-white px-4 sm:min-h-0 sm:py-2 text-sm font-medium text-ink hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-50"
             >
               {githubSearching ? <Loader2 size={14} className="animate-spin"/> : <Search size={14}/>}
               {githubSearching ? '搜索中…' : '搜 GitHub 截图'}
@@ -361,7 +370,7 @@ function RewriteCard({ result, verdict, verifying, onVerify, onCopy, onTwitterIn
           type="button"
           onClick={onVerify}
           disabled={verifying}
-          className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-white px-3 py-1 text-[11px] font-medium text-indigo-700 hover:border-indigo-400 disabled:opacity-50"
+          className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-indigo-200 bg-white px-3 sm:min-h-0 sm:py-1.5 text-[11px] font-medium text-indigo-700 hover:border-indigo-400 disabled:opacity-50"
         >
           {verifying ? <Loader2 size={11} className="animate-spin"/> : <ShieldCheck size={11}/>}
           {verifying ? '交叉验证中…' : '交叉验证'}
@@ -451,7 +460,7 @@ function RewriteCard({ result, verdict, verifying, onVerify, onCopy, onTwitterIn
         <button
           type="button"
           onClick={onCopy}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+          className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-slate-900 px-3 sm:min-h-0 sm:py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
         >
           {copyState === 'copied' ? <Check size={12}/> : <Copy size={12}/>}
           {copyState === 'copied' ? '已复制' : copyState === 'failed' ? '复制失败' : '复制新稿'}
@@ -461,7 +470,7 @@ function RewriteCard({ result, verdict, verifying, onVerify, onCopy, onTwitterIn
             href={onTwitterIntent}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-sky-300 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:border-sky-400"
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-sky-300 bg-sky-50 px-3 sm:min-h-0 sm:py-1.5 text-xs font-semibold text-sky-700 hover:border-sky-400"
           >
             <Twitter size={12}/>打开 Twitter 发推页
             <ArrowRight size={11}/>

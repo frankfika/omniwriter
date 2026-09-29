@@ -47,8 +47,8 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
         if (!menu.ref.current?.contains(event.target as Node)) menu.close();
       }
     };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener('pointerdown', handleClick);
+    return () => document.removeEventListener('pointerdown', handleClick);
   }, [agentMenuOpen, styleMenuOpen, templateMenuOpen]);
 
   const selectedAgent = selectedAgentId ? AGENTS.find((item) => item.id === selectedAgentId) : null;
@@ -156,8 +156,11 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
             <div ref={agentMenuRef} className="relative shrink-0">
               <button
                 type="button"
+                aria-haspopup="menu"
+                aria-expanded={agentMenuOpen}
+                aria-label={selectedAgent ? `写作能力：${selectedAgent.name}` : '写作能力（自动选择）'}
                 onClick={() => { setAgentMenuOpen((open) => !open); setStyleMenuOpen(false); setTemplateMenuOpen(false); }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-ink-line/70 bg-white px-2.5 py-1.5 text-xs font-medium text-ink transition-colors hover:border-indigo-300 hover:bg-indigo-50/50"
+                className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-ink-line/70 bg-white px-2.5 sm:min-h-0 sm:py-1.5 text-xs font-medium text-ink transition-colors hover:border-indigo-300 hover:bg-indigo-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
               >
                 {selectedAgent ? (
                   <><span>{selectedAgent.emoji}</span><span className="max-w-20 truncate sm:max-w-32">{selectedAgent.name}</span></>
@@ -167,12 +170,13 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
                 <ChevronDown size={12} className={cn('text-ink-muted transition-transform', agentMenuOpen && 'rotate-180')}/>
               </button>
               {agentMenuOpen && (
-                <div className="absolute bottom-full left-0 z-30 mb-2 w-60 rounded-xl border border-white/80 bg-white/95 p-1.5 shadow-[0_16px_48px_rgba(79,70,229,0.15)] backdrop-blur-xl">
+                <div role="menu" aria-label="选择写作能力" className="absolute bottom-full left-0 z-30 mb-2 w-60 rounded-xl border border-white/80 bg-white/95 p-1.5 shadow-[0_16px_48px_rgba(79,70,229,0.15)] backdrop-blur-xl">
                   <button
                     type="button"
+                    role="menuitem"
                     onClick={() => pickAgent(null)}
                     className={cn(
-                      'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs transition-colors',
+                      'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2',
                       !selectedAgentId ? 'bg-indigo-50 font-medium text-indigo-700' : 'text-ink hover:bg-slate-50',
                     )}
                   >
@@ -187,9 +191,10 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
                     <button
                       key={item.id}
                       type="button"
+                      role="menuitem"
                       onClick={() => pickAgent(item.id)}
                       className={cn(
-                        'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs transition-colors',
+                        'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2',
                         selectedAgentId === item.id ? 'bg-indigo-50 font-medium text-indigo-700' : 'text-ink hover:bg-slate-50',
                       )}
                     >
@@ -206,20 +211,24 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
             <div ref={styleMenuRef} className="relative shrink-0">
               <button
                 type="button"
+                aria-haspopup="menu"
+                aria-expanded={styleMenuOpen}
+                aria-label={selectedStyle ? `写作风格：${selectedStyle.name}` : '写作风格'}
                 onClick={() => { closeAllMenus(); setStyleMenuOpen(true); }}
-                className="inline-flex items-center gap-1 rounded-lg border border-ink-line/70 bg-white px-2 py-1.5 text-xs font-medium text-ink transition-colors hover:border-indigo-300 hover:bg-indigo-50/50"
+                className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-ink-line/70 bg-white px-2 sm:min-h-0 sm:py-1.5 text-xs font-medium text-ink transition-colors hover:border-indigo-300 hover:bg-indigo-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
               >
                 <span className="max-w-14 truncate sm:max-w-20">{selectedStyle ? selectedStyle.name : '风格'}</span>
                 <ChevronDown size={11} className={cn('text-ink-muted transition-transform', styleMenuOpen && 'rotate-180')}/>
               </button>
               {styleMenuOpen && (
-                <div className="absolute bottom-full left-0 z-30 mb-2 w-44 rounded-xl border border-white/80 bg-white/95 p-1.5 shadow-[0_16px_48px_rgba(79,70,229,0.15)] backdrop-blur-xl">
+                <div role="menu" aria-label="选择写作风格" className="absolute bottom-full left-0 z-30 mb-2 w-44 rounded-xl border border-white/80 bg-white/95 p-1.5 shadow-[0_16px_48px_rgba(79,70,229,0.15)] backdrop-blur-xl">
                   {!selectedAgentId && (
                     <button
                       type="button"
+                      role="menuitem"
                       onClick={() => { setSelectedStyleId(null); setStyleMenuOpen(false); }}
                       className={cn(
-                        'flex w-full items-center rounded-lg px-3 py-2 text-left text-xs transition-colors',
+                        'flex w-full items-center rounded-lg px-3 py-2 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2',
                         !selectedStyleId ? 'bg-indigo-50 font-medium text-indigo-700' : 'text-ink hover:bg-slate-50',
                       )}
                     >
@@ -230,9 +239,10 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
                     <button
                       key={item.id}
                       type="button"
+                      role="menuitem"
                       onClick={() => { setSelectedStyleId(item.id); setStyleMenuOpen(false); }}
                       className={cn(
-                        'flex w-full items-center rounded-lg px-3 py-2 text-left text-xs transition-colors',
+                        'flex w-full items-center rounded-lg px-3 py-2 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2',
                         selectedStyleId === item.id ? 'bg-indigo-50 font-medium text-indigo-700' : 'text-ink hover:bg-slate-50',
                       )}
                     >
@@ -286,7 +296,7 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
             onClick={() => void submit()}
             disabled={!input.trim() || submitting}
             className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-slate-900 to-indigo-700 px-4 text-sm font-semibold text-white shadow-sm transition-all hover:shadow-md disabled:pointer-events-none disabled:opacity-40 sm:size-10 sm:px-0"
-            aria-label="开始创作"
+            aria-label={submitting ? '正在读取素材' : '开始创作'}
           >
             {submitting ? <Loader2 size={16} className="animate-spin"/> : <ArrowUp size={17}/>}<span className="sm:hidden">{submitting ? '正在读取素材' : '开始创作'}</span>
           </button>
