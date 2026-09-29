@@ -81,14 +81,21 @@ export function Editor({
         const file = imageItem.getAsFile();
         if (!file) return false;
         event.preventDefault();
-        void insertImageFile(view, file, null);
+        // onInserted 同步派发 onChange 给父组件，避免 view.dispatch 的异步时序让 store 漏更新。
+        void insertImageFile(view, file, null, (html) => {
+          pendingFromExternal.current = true;
+          onChange(html);
+        });
         return true;
       },
       handleDrop(view, event) {
         const file = event.dataTransfer?.files?.[0];
         if (!file || !file.type.startsWith('image/')) return false;
         event.preventDefault();
-        void insertImageFile(view, file, { x: event.clientX, y: event.clientY });
+        void insertImageFile(view, file, { x: event.clientX, y: event.clientY }, (html) => {
+          pendingFromExternal.current = true;
+          onChange(html);
+        });
         return true;
       },
     },
@@ -177,6 +184,7 @@ async function insertImageFile(
   view: EditorView,
   file: File,
   at: { x: number; y: number } | null,
+  onInserted?: (html: string) => void,
 ) {
   let dataUrl: string;
   try {
@@ -203,6 +211,10 @@ async function insertImageFile(
   const afterPos = Math.min(tr.mapping.map(pos, 1), tr.doc.content.size);
   tr.insert(afterPos, state.schema.nodes.paragraph.create());
   view.dispatch(tr);
+  // view.dispatch 在 useEditor 的 onUpdate 回调里**可能**延迟一拍（异步插入 + 同步派发），
+  // 仅靠 onUpdate 在某些时序下不触发 → store 永远停在原值，下次 hydrate 之后图片丢失。
+  // 显式把当前 HTML 同步给父组件，保证落盘不依赖 Tiptap 内部回调时序。
+  onInserted?.(view.dom.innerHTML);
 }
 
 function ToolbarBtn({ on, onClick, children, ...rest }: { on?: boolean; onClick: () => void; children: React.ReactNode; [k: string]: unknown }) {
