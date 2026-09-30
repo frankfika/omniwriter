@@ -173,6 +173,18 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
     void onGenerate();
   }, [aiReady, article, hydrated, searchParams]);
 
+  // 标题输入框用本地 draft state：extractContentTitle 在用户清空时会返回 null，
+  // 此时 selectedTitle 会回退到 article.title 让受控 input 立刻弹回旧值——用户清不掉。
+  // 用 draft state 保留输入框里的临时空值，等用户 blur 时才落到 store。
+  // 必须在 early return 之前声明，否则 hydrated / article 状态切换时钩子数量变化会触发 React 报错。
+  const [titleDraft, setTitleDraft] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    // 切语言 / 换文章 / 文章 title 改变 → 清掉 draft，让 selectedTitle 走真实路径，
+    // 避免「旧 draft + 新文章」错位。不能把 article.content 放进 deps：标题输入的同时
+    // selectedContent 在变（用户敲字），effect 反复跑会导致 input 跳回旧值。
+    setTitleDraft(null);
+  }, [language, params.id, article?.title]);
+
   if (!hydrated) {
     return <AppShell><div className="p-10 text-ink-muted text-sm">载入中…</div></AppShell>;
   }
@@ -799,7 +811,12 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
   const contentParts = splitBilingualContent(article.content);
   const showLanguageTabs = article.brief.bilingual || contentParts.hasEnglish;
   const selectedContent = language === 'zh' ? contentParts.zh : contentParts.en;
-  const selectedTitle = extractContentTitle(selectedContent) ?? (language === 'zh' ? article.title : '');
+  // 标题输入框用本地 draft state：extractContentTitle 在用户清空时会返回 null，
+  // 此时 selectedTitle 会回退到 article.title 让受控 input 立刻弹回旧值——用户清不掉。
+  // 用 draft state 保留输入框里的临时空值，等用户 blur 时才落到 store。
+  const storedTitle = language === 'zh' ? article.title : '';
+  const storedHeading = extractContentTitle(selectedContent);
+  const selectedTitle = titleDraft ?? (storedHeading ?? storedTitle);
   const renderedTitle = selectedTitle || (language === 'zh' ? article.title : 'English Version');
   const updateSelectedContent = (next: string) => {
     const zh = language === 'zh' ? next : contentParts.zh;
@@ -824,7 +841,14 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
         <div className="flex items-center gap-3">
           <input
             value={selectedTitle}
-            onChange={(e) => updateSelectedTitle(e.target.value)}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={() => {
+              // 失焦时把 draft 落到 store + heading，并清掉 draft 让 selectedTitle 走真实路径。
+              if (titleDraft !== null) {
+                updateSelectedTitle(titleDraft);
+                setTitleDraft(null);
+              }
+            }}
             aria-label={language === 'zh' ? '中文标题' : 'English title'}
             placeholder={language === 'zh' ? '中文标题' : 'English title'}
             className="min-h-10 min-w-0 flex-1 text-[22px] font-bold tracking-tightish bg-transparent focus:outline-none placeholder:text-ink-muted sm:min-h-0"

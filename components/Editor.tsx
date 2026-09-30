@@ -58,6 +58,9 @@ export function Editor({
   // 初始化阶段 Tiptap 会触发一次「空文档」onUpdate；用 ref 跳过首次回调，
   // 避免把刚 join 的双语内容或空白覆盖回 store。
   const firstUpdateRef = React.useRef(true);
+  // 同一插入操作里 onUpdate 与 onInserted 都可能触发；记录最近一次 onUpdate 时间戳，
+  // 若 100ms 内显式 onInserted 再调一次，就跳过——避免 updatedAt 翻倍 + 内容漂移。
+  const lastOnUpdateAtRef = React.useRef(0);
 
   const editor = useEditor({
     extensions: [
@@ -82,7 +85,9 @@ export function Editor({
         if (!file) return false;
         event.preventDefault();
         // onInserted 同步派发 onChange 给父组件，避免 view.dispatch 的异步时序让 store 漏更新。
+        // 若 Tiptap 的 onUpdate 在 100ms 内已经覆盖了同一次插入，这里就跳过——防 updatedAt 翻倍。
         void insertImageFile(view, file, null, (html) => {
+          if (Date.now() - lastOnUpdateAtRef.current < 100) return;
           pendingFromExternal.current = true;
           onChange(html);
         });
@@ -93,6 +98,7 @@ export function Editor({
         if (!file || !file.type.startsWith('image/')) return false;
         event.preventDefault();
         void insertImageFile(view, file, { x: event.clientX, y: event.clientY }, (html) => {
+          if (Date.now() - lastOnUpdateAtRef.current < 100) return;
           pendingFromExternal.current = true;
           onChange(html);
         });
@@ -107,6 +113,7 @@ export function Editor({
       // 告诉 useEffect：下一帧到位的 prop 是我们自己写的，不是外部流入，
       // 这样就不会触发 setContent 把刚写入的内容再覆盖一次。
       pendingFromExternal.current = true;
+      lastOnUpdateAtRef.current = Date.now();
       onChange(editor.getHTML());
     },
     immediatelyRender: false,
