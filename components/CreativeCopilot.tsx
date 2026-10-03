@@ -82,7 +82,7 @@ export function CreativeCopilot({
                   title={`${agent.description}，例如：${agent.example}`}
                 >
                   <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-ink text-xs font-bold text-white">{agent.symbol}</span>
-                  <span className="min-w-0"><span className="block text-xs font-semibold text-ink">{agent.label}</span><span className="block truncate text-[9px] text-ink-muted">{agent.description}</span></span>
+                  <span className="min-w-0"><span className="block text-xs font-semibold text-ink">{agent.label}</span><span className="block truncate text-xs text-ink-muted">{agent.description}</span></span>
                 </button>
               ))}
             </div>

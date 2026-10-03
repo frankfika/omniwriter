@@ -124,8 +124,16 @@ export async function POST(req: NextRequest) {
             detail: `${md.length.toLocaleString('zh-CN')} 字`, at: Date.now(),
           });
           const title = md.match(/^# (.+)$/m)?.[1]?.trim();
-          // 交叉验证：跑在 done 之前，给用户多一道质检；失败不影响主流程，
-          // 事件也是可选的——不认识 verify 的消费者忽略即可。
+          // done 先发，核查异步跟进，失败或超时不影响已交付正文。交叉验证最长可拖
+          // 90 秒，heartbeat 要等它结束再清，期间靠心跳行保住连接；客户端读到 done
+          // 就先走，迟到的 verify 由它的后台读流消费。事件仍是可选的——不认识
+          // verify 的消费者忽略即可。
+          send({
+            type: 'done', requestId, md, title,
+            durationMs: Date.now() - startedAt,
+            issues: validateMarkdown(md).length,
+            at: Date.now(),
+          });
           try {
             const verdict = await crossValidateDraft({
               draft: md,
@@ -135,12 +143,6 @@ export async function POST(req: NextRequest) {
             });
             if (verdict) send({ type: 'verify', requestId, verdict, at: Date.now() });
           } catch { /* 验证失败不阻断交付 */ }
-          send({
-            type: 'done', requestId, md, title,
-            durationMs: Date.now() - startedAt,
-            issues: validateMarkdown(md).length,
-            at: Date.now(),
-          });
           if (heartbeat) clearInterval(heartbeat);
           if (!cancelled) controller.close();
         } catch (error) {

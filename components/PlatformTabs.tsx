@@ -140,7 +140,7 @@ export function PlatformTabs({
         {aiReady === false && <Link href="/settings" className="mr-auto text-xs text-ink-muted underline underline-offset-2">连接 AI 后自动生成</Link>}
         <Button
           size="sm"
-          variant={remainingCount === 0 ? 'ghost' : 'primary'}
+          variant="ghost"
           onClick={onAdaptAll}
           disabled={Boolean(generating || batchProgress) || !article.content.trim() || aiReady === false}
         >

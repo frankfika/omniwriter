@@ -25,7 +25,7 @@ export function AiSetupGuide({ onRefresh, compact = false }: Props) {
     <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
       <div className="font-semibold mb-1.5">先配置 AI 密钥，AI 生成才可用</div>
       {!compact && (
-        <ol className="list-decimal pl-4 space-y-1 text-[12.5px] text-amber-900/90">
+        <ol className="list-decimal pl-4 space-y-1 text-xs text-amber-900/90">
           <li>
             打开<Link href="/settings" className="underline">设置 → AI 连接</Link>
             （或侧栏「设置」）。
@@ -49,7 +49,7 @@ export function AiSetupGuide({ onRefresh, compact = false }: Props) {
           </span>
         )}
         {compact && (
-          <Link href="/settings" className="text-[12px] underline underline-offset-2">去设置填密钥</Link>
+          <Link href="/settings" className="text-xs underline underline-offset-2">去设置填密钥</Link>
         )}
       </div>
     </div>

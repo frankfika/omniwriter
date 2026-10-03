@@ -145,7 +145,7 @@ export default function SettingsPage() {
       <div className="h-full overflow-y-auto bg-ink-panel/20">
         <div className="max-w-5xl mx-auto px-5 sm:px-8 py-8 sm:py-10">
           <div className="mb-7">
-            <h1 className="text-[28px] font-bold tracking-tightish mb-1">设置</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tightish mb-1">设置</h1>
             <p className="text-sm text-ink-muted">连接一次，之后专注创作。所有更改自动保存。</p>
           </div>
 
@@ -167,7 +167,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1"><h2 className="text-base font-semibold">{aiReady ? 'AI 已经准备好' : '连接你的 AI'}</h2><span className={cn('size-2 rounded-full', aiReady ? 'bg-emerald-500' : aiReady === false ? 'bg-amber-500' : 'bg-ink-line')}/></div>
-                    <p className="text-[12.5px] text-ink-muted leading-relaxed">{aiReady ? `${connectionName}。所有 Agent 都可以直接生成和适配。` : '连接后即可使用写作 Agent；编辑、排版和导出不依赖 AI。'}</p>
+                    <p className="text-xs text-ink-muted leading-relaxed">{aiReady ? `${connectionName}。所有 Agent 都可以直接生成和适配。` : '连接后即可使用写作 Agent；编辑、排版和导出不依赖 AI。'}</p>
                   </div>
                   <Button variant={aiReady ? 'outline' : 'primary'} onClick={() => setManageAi((open) => !open)} className="shrink-0">{manageAi ? '收起' : aiReady ? '管理连接' : '连接 AI'}</Button>
                 </div>

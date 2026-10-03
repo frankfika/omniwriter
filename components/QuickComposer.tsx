@@ -123,7 +123,7 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
 
   return (
     <div className={cn('w-full', !compact && 'mx-auto max-w-3xl')}>
-      <div className="overflow-hidden rounded-2xl border border-ink-line bg-white">
+      <div className="rounded-2xl border border-ink-line bg-white">
         <textarea
           aria-label="创作素材"
           value={input}
@@ -138,7 +138,7 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
           autoFocus={compact}
           placeholder={'像和编辑说话一样告诉我：素材是什么、想表达什么、准备发到哪里。\n也可以直接粘贴正文、多个网页或 GitHub 链接…'}
           className={cn(
-            'w-full resize-none border-0 bg-transparent px-5 pt-5 text-base leading-relaxed text-ink placeholder:text-ink-muted/80 focus:outline-none sm:px-6 sm:pt-6',
+            'w-full resize-none rounded-t-2xl border-0 bg-transparent px-5 pt-5 text-base leading-relaxed text-ink placeholder:text-ink-muted/80 focus:outline-none sm:px-6 sm:pt-6',
             compact ? 'min-h-40' : 'min-h-52 sm:text-lg',
           )}
         />
@@ -175,7 +175,7 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
                 <ChevronDown size={12} className={cn('text-ink-muted transition-transform', agentMenuOpen && 'rotate-180')}/>
               </button>
               {agentMenuOpen && (
-                <div role="menu" aria-label="选择写作能力" className="absolute bottom-full left-0 z-30 mb-2 w-60 rounded-xl border border-ink-line bg-white p-1.5 shadow-sm">
+                <div role="menu" aria-label="选择写作能力" className="absolute bottom-full left-0 z-30 mb-2 max-h-[60vh] w-60 overflow-y-auto rounded-xl border border-ink-line bg-white p-1.5 shadow-sm">
                   <button
                     type="button"
                     role="menuitem"
@@ -226,7 +226,7 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
                 <ChevronDown size={11} className={cn('text-ink-muted transition-transform', styleMenuOpen && 'rotate-180')}/>
               </button>
               {styleMenuOpen && (
-                <div role="menu" aria-label="选择写作风格" className="absolute bottom-full left-0 z-30 mb-2 w-44 rounded-xl border border-ink-line bg-white p-1.5 shadow-sm">
+                <div role="menu" aria-label="选择写作风格" className="absolute bottom-full left-0 z-30 mb-2 max-h-[60vh] w-44 overflow-y-auto rounded-xl border border-ink-line bg-white p-1.5 shadow-sm">
                   {!selectedAgentId && (
                     <button
                       type="button"
@@ -268,7 +268,7 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
                 <ChevronDown size={11} className={cn('text-ink-muted transition-transform', templateMenuOpen && 'rotate-180')}/>
               </button>
               {templateMenuOpen && (
-                <div className="absolute bottom-full left-0 z-30 mb-2 w-44 rounded-xl border border-ink-line bg-white p-1.5 shadow-sm">
+                <div className="absolute bottom-full left-0 z-30 mb-2 max-h-[60vh] w-44 overflow-y-auto rounded-xl border border-ink-line bg-white p-1.5 shadow-sm">
                   <button
                     type="button"
                     onClick={() => { setSelectedTemplateId(null); setTemplateMenuOpen(false); }}
@@ -298,7 +298,7 @@ export function QuickComposer({ compact = false, onComplete }: { compact?: boole
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-3 border-t border-ink-line bg-white px-4 py-3 sm:px-5">
+        <div className="flex items-center justify-between gap-3 rounded-b-2xl border-t border-ink-line bg-white px-4 py-3 sm:px-5">
           <div className="flex min-w-0 items-center gap-1.5">
             <button
               type="button"

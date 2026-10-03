@@ -45,3 +45,12 @@ describe('validateMarkdown H1 检查', () => {
     expect(validateMarkdown('# 标题\n\n<h1>English Version</h1>').some((i) => i.message.includes('应仅保留一个'))).toBe(false);
   });
 });
+
+describe('validateMarkdown AI 味词检查', () => {
+  it('出现“综上所述”等套话时报 low', () => {
+    expect(validateMarkdown('# t\n综上所述')).toContainEqual({
+      severity: 'low',
+      message: '出现常见 AI/营销标签词："综上所述"',
+    });
+  });
+});

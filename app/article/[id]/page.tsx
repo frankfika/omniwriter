@@ -22,6 +22,7 @@ import { PLATFORMS, PLATFORM_ORDER } from '@/src/lib/platforms';
 import type { Brief, CreatorAgentId, PlatformId } from '@/src/lib/types';
 import { downloadBlob, htmlToMarkdown, markdownToInlineHtml } from '@/src/lib/export-html';
 import { cn } from '@/components/ui/cn';
+import { Button } from '@/components/ui/button';
 import { ErrorBanner, useError } from '@/components/ErrorBanner';
 import { useAiStatus } from '@/src/lib/use-ai-status';
 import type { CrossValidationVerdict, GenerationStreamEvent, GenerationViewState } from '@/src/lib/generation-events';
@@ -42,7 +43,7 @@ type WorkspaceStep = 'brief' | 'editor' | 'publish';
 function initialWorkspaceStep(searchParams: Readonly<URLSearchParams>): WorkspaceStep {
   const step = searchParams.get('step');
   if (step === 'brief' || step === 'editor' || step === 'publish') return step;
-  return searchParams.get('write') === '1' ? 'editor' : 'brief';
+  return 'brief';
 }
 
 export default function ArticlePage({ params }: { params: { id: string } }) {
@@ -60,9 +61,12 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
 
   const [generating, setGenerating] = React.useState(false);
   const [generationProgress, setGenerationProgress] = React.useState<GenerationViewState | null>(null);
-  // 交叉验证摘要：verify 事件只比 done 早一点，而 generationProgress 在进入编辑器
-  // 约 0.5s 后就被清空，验证结果会只闪现一下——挪到独立 state，在编辑器标题行常驻。
+  // 交叉验证摘要：verify 在 done 之后异步到达（服务端核查最长 90 秒），主读循环
+  // 读到 done 就返回，由后台读流消费迟到的 verify。结果落到独立 state，在编辑器
+  // 标题行常驻。verdictRunRef 用来作废过期结果：refine 成功或新一轮生成都会推进
+  // 计数，迟到的 verify 对不上号就丢弃，避免盖掉改稿/重新生成后的正文。
   const [verdict, setVerdict] = React.useState<CrossValidationVerdict | null>(null);
+  const verdictRunRef = React.useRef(0);
   const generationController = React.useRef<AbortController | null>(null);
   const autoGenerateStarted = React.useRef(false);
   const platformBatchController = React.useRef<AbortController | null>(null);
@@ -101,7 +105,6 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
     setMobileTab(step);
     const url = new URL(window.location.href);
     url.searchParams.set('step', step);
-    url.searchParams.delete('write');
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
   }, []);
 
@@ -372,6 +375,8 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
     const localRequestId = crypto.randomUUID();
     const startedAt = Date.now();
     setGenerating(true);
+    // 新一轮生成开始：作废上一轮可能还在路上的迟到 verify（见 verdictRunRef 注释）。
+    const verdictRun = ++verdictRunRef.current;
     setVerdict(null);
     setGenerationProgress({
       requestId: localRequestId,
@@ -423,7 +428,6 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
             completed: previous && previous.stage !== event.stage
               ? Array.from(new Set([...previous.completed, previous.stage]))
               : previous?.completed ?? [],
-            ...(previous?.verdict ? { verdict: previous.verdict } : {}),
           }));
         } else if (event.type === 'delta') {
           setGenerationProgress((previous) => previous ? {
@@ -441,12 +445,10 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
             completed: [],
           });
         } else if (event.type === 'verify') {
-          setGenerationProgress((previous) => previous ? {
-            ...previous,
-            verdict: event.verdict,
-          } : previous);
-          // 同步落到独立 state：生成卡片在进入编辑器后会被清空，摘要在编辑器标题行常驻。
-          setVerdict(event.verdict);
+          // verify 现在只走独立的 verdict state；不再写入 generationProgress（无消费者）。
+          // 迟到的 verify 只对触发它的那轮生成负责：refine 成功或新一轮生成都会
+          // 推进 verdictRunRef，对不上号的结果直接丢弃，不落标题行。
+          if (verdictRun === verdictRunRef.current) setVerdict(event.verdict);
         } else if (event.type === 'done') {
           completed = true;
           generatedMaster = event.md;
@@ -459,7 +461,6 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
             chars: event.md.length,
             preview: previous?.preview,
             completed: previous?.completed ?? [],
-            ...(previous?.verdict ? { verdict: previous.verdict } : {}),
           }));
           setContent(article.id, markdownToInlineHtml(event.md));
           setLanguage('zh');
@@ -469,25 +470,35 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
         }
       };
 
-      while (true) {
-        const { done, value } = await reader.read();
-        buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
-        const chunks = buffer.split('\n\n');
-        buffer = chunks.pop() ?? '';
-        for (const chunk of chunks) {
-          const data = chunk.split('\n').find((line) => line.startsWith('data: '))?.slice(6);
-          if (data) {
-            try {
-              applyEvent(JSON.parse(data) as GenerationStreamEvent);
-            } catch (parseError) {
-              // 单条事件损坏不能毁掉整条流——其余事件仍可能正常送达。
-              console.warn('[OmniWriter] 跳过无法解析的 SSE 事件:', parseError);
+      // 读循环抽成 pump：主流程读到 done（completed 标志，不是 reader 的 done）就
+      // 返回，进编辑器不被最长 90 秒的交叉核查拖住；随后再起一个后台 pump 继续读，
+      // 只消费迟到的 verify，读到服务端关流为止。decoder/reader/buffer/applyEvent
+      // 都是这层闭包共享的，两个 pump 接的是同一条流。
+      const pump = async (stopWhen: () => boolean) => {
+        while (true) {
+          const { done, value } = await reader.read();
+          buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+          const chunks = buffer.split('\n\n');
+          buffer = chunks.pop() ?? '';
+          for (const chunk of chunks) {
+            const data = chunk.split('\n').find((line) => line.startsWith('data: '))?.slice(6);
+            if (data) {
+              try {
+                applyEvent(JSON.parse(data) as GenerationStreamEvent);
+              } catch (parseError) {
+                // 单条事件损坏不能毁掉整条流——其余事件仍可能正常送达。
+                console.warn('[OmniWriter] 跳过无法解析的 SSE 事件:', parseError);
+              }
             }
           }
+          if (done) break;
+          if (stopWhen()) break;
         }
-        if (done) break;
-      }
+      };
+      await pump(() => completed);
       if (!completed) throw new Error('生成连接提前结束，请重试');
+      // done 已到、正文已交付：不再等核查，后台读流静默消费迟到事件（含读取异常）。
+      void pump(() => false).catch(() => {});
       await new Promise((resolve) => setTimeout(resolve, 500));
       selectWorkspaceStep('editor');
       if (briefSnapshot.platforms.length > 0) {
@@ -632,6 +643,97 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
     });
   };
 
+  // 对话改稿的执行段：AI 就绪检查 → /api/refine → 落稿 → 收尾消息（含同步已有
+  // 平台稿）。onCreativeCommand 的关键词路由只决定「要不要走这里」；verdict 浮层
+  // 的一键应用也直接调用它——绕开路由，建议文本里出现「知乎/模板」之类的词
+  // 不会被误路由到平台批量生成或切换模板。
+  // 用 const 箭头（而不是 function 声明）：function 会提升到 `if (!article)` 收窄
+  // 之前，闭包里拿不到「article 非空」的类型收窄。
+  const runRefine = async (instruction: string, agentId: CreatorAgentId, displayLabel?: string) => {
+    if (aiReady === false) throw new Error('连接 AI 后才能继续改稿；原稿仍可手动编辑。');
+    const refineAbort = new AbortController();
+    refineController.current = refineAbort;
+    let refineTimedOut = false;
+    const refineTimer = window.setTimeout(() => {
+      refineTimedOut = true;
+      refineAbort.abort();
+    }, 90_000);
+    let payload: { md?: string; title?: string; error?: string };
+    try {
+      const res = await fetch('/api/refine', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        signal: refineAbort.signal,
+        body: JSON.stringify({
+          brief: article.brief,
+          master: article.content,
+          instruction,
+          ai: loadAiConfig(),
+        }),
+      });
+      payload = (await res.json().catch(() => ({}))) as { md?: string; title?: string; error?: string };
+      if (!res.ok || !payload.md?.trim()) throw new Error(payload.error || '这次修改没有返回完整稿件');
+    } catch (error) {
+      // 把 abort / 被取代 / 网络异常这些细枝末节翻译成中文提示，不要把
+      // 浏览器原生 AbortError 字符串直接抛给用户。
+      if (refineAbort.signal.aborted) {
+        throw new Error(refineTimedOut ? '改稿超过 90 秒，请稍后重试' : '改稿已停止，原稿没有变化');
+      }
+      if (refineController.current !== null) throw new Error('有新的改稿请求正在处理，本次结果已忽略');
+      throw error;
+    } finally {
+      window.clearTimeout(refineTimer);
+      if (refineController.current === refineAbort) refineController.current = null;
+    }
+    setContent(article.id, markdownToInlineHtml(payload.md));
+    // 改稿已改变正文，生成时那次的核查结论不再代表当前稿，清掉避免误导；
+    // 同时推进 verdictRunRef，让仍在路上的迟到 verify 事件作废。
+    verdictRunRef.current += 1;
+    setVerdict(null);
+    if (payload.title) onTitle(payload.title);
+    setLanguage('zh');
+    selectWorkspaceStep('editor');
+
+    const existingPlatforms = PLATFORM_ORDER.filter((platform) => Boolean(article.platformDrafts[platform]?.trim()));
+    addConversationMessage(
+      'assistant',
+      existingPlatforms.length > 0
+        ? `已按“${displayLabel ?? instruction}”更新完整母稿，正在同步 ${existingPlatforms.length} 个已有平台稿。`
+        : `已按“${displayLabel ?? instruction}”更新完整母稿。你可以继续改，不需要重新开始。`,
+      agentId,
+    );
+    if (existingPlatforms.length > 0) {
+      void runPlatformBatch({
+        brief: article.brief,
+        master: payload.md,
+        wechatDraft: payload.md,
+        platforms: existingPlatforms,
+        revealPublish: false,
+      });
+    }
+  }
+
+  // verdict 浮层的「让 AI 按建议修改」：直接走 runRefine + 主编，不过 onCreativeCommand
+  // 的关键词路由（核查建议里出现「知乎/模板」等词会被误路由）。成功后 runRefine 内部
+  // 已 setVerdict(null)，浮层随之消失；不自动重新核查。
+  const onApplyVerdict = async () => {
+    if (!verdict) return;
+    const details = verdictDetailsRef.current;
+    if (details) details.open = false;
+    addConversationMessage('user', '按核查建议修改');
+    setCommandBusy(true);
+    try {
+      await runRefine(applyVerdictInstruction(verdict), 'chief-editor', '核查建议');
+    } catch (reason) {
+      // 与 onCreativeCommand 的失败路径一致：顶部横幅 + 对话里留一条失败记录。
+      const message = (reason as Error).message || '这次操作没有完成，请重试';
+      showError(message);
+      addConversationMessage('assistant', message, 'chief-editor');
+    } finally {
+      setCommandBusy(false);
+    }
+  };
+
   const onCreativeCommand = async (rawInstruction: string) => {
     const originalInstruction = rawInstruction.trim();
     const routed = routeCreatorCommand(originalInstruction);
@@ -754,65 +856,8 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
         return;
       }
 
-      if (aiReady === false) throw new Error('连接 AI 后才能继续改稿；原稿仍可手动编辑。');
-      const refineAbort = new AbortController();
-      refineController.current = refineAbort;
-      let refineTimedOut = false;
-      const refineTimer = window.setTimeout(() => {
-        refineTimedOut = true;
-        refineAbort.abort();
-      }, 90_000);
-      let payload: { md?: string; title?: string; error?: string };
-      try {
-        const res = await fetch('/api/refine', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          signal: refineAbort.signal,
-          body: JSON.stringify({
-            brief: article.brief,
-            master: article.content,
-            instruction,
-            ai: loadAiConfig(),
-          }),
-        });
-        payload = (await res.json().catch(() => ({}))) as { md?: string; title?: string; error?: string };
-        if (!res.ok || !payload.md?.trim()) throw new Error(payload.error || '这次修改没有返回完整稿件');
-      } catch (error) {
-        // 把 abort / 被取代 / 网络异常这些细枝末节翻译成中文提示，不要把
-        // 浏览器原生 AbortError 字符串直接抛给用户。
-        if (refineAbort.signal.aborted) {
-          throw new Error(refineTimedOut ? '改稿超过 90 秒，请稍后重试' : '改稿已停止，原稿没有变化');
-        }
-        if (refineController.current !== null) throw new Error('有新的改稿请求正在处理，本次结果已忽略');
-        throw error;
-      } finally {
-        window.clearTimeout(refineTimer);
-        if (refineController.current === refineAbort) refineController.current = null;
-      }
-      setContent(article.id, markdownToInlineHtml(payload.md));
-      // 对话改稿已改变正文，生成时那次的核查结论不再代表当前稿，清掉避免误导。
-      setVerdict(null);
-      if (payload.title) onTitle(payload.title);
-      setLanguage('zh');
-      selectWorkspaceStep('editor');
-
-      const existingPlatforms = PLATFORM_ORDER.filter((platform) => Boolean(article.platformDrafts[platform]?.trim()));
-      addConversationMessage(
-        'assistant',
-        existingPlatforms.length > 0
-          ? `已按“${instruction}”更新完整母稿，正在同步 ${existingPlatforms.length} 个已有平台稿。`
-          : `已按“${instruction}”更新完整母稿。你可以继续改，不需要重新开始。`,
-        agentId,
-      );
-      if (existingPlatforms.length > 0) {
-        void runPlatformBatch({
-          brief: article.brief,
-          master: payload.md,
-          wechatDraft: payload.md,
-          platforms: existingPlatforms,
-          revealPublish: false,
-        });
-      }
+      // 路由分支都不命中：交给主编按指令改稿（AI 就绪检查在 runRefine 内）。
+      await runRefine(instruction, agentId);
     } catch (reason) {
       const message = (reason as Error).message || '这次操作没有完成，请重试';
       showError(message);
@@ -871,7 +916,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
             }}
             aria-label={language === 'zh' ? '中文标题' : 'English title'}
             placeholder={language === 'zh' ? '中文标题' : 'English title'}
-            className="min-h-10 min-w-0 flex-1 text-[22px] font-bold tracking-tightish bg-transparent focus:outline-none placeholder:text-ink-muted sm:min-h-0"
+            className="min-h-10 min-w-0 flex-1 text-2xl font-bold tracking-tightish bg-transparent focus:outline-none placeholder:text-ink-muted sm:min-h-0"
           />
           {batchProgress && (
             <button
@@ -914,6 +959,17 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
                 )}
                 {verdict.issues.length === 0 && verdict.suggestions.length === 0 && (
                   <p className="mt-2 text-ink-soft">没有具体问题或建议。</p>
+                )}
+                {(verdict.issues.length > 0 || verdict.suggestions.length > 0) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-3 w-full"
+                    disabled={commandBusy || generating || Boolean(batchProgress)}
+                    onClick={() => { void onApplyVerdict(); }}
+                  >
+                    让 AI 按建议修改
+                  </Button>
                 )}
               </div>
             </details>
@@ -1133,6 +1189,21 @@ function slug(s: string) {
 
 function firstHttpUrl(value: string): string | undefined {
   return value.match(/https?:\/\/[^\s<>"')\]]+/i)?.[0];
+}
+
+// 一键应用核查建议时拼给 runRefine 的指令：有问题段就列问题，有建议段就列建议
+// （按钮只在两者至少一项非空时渲染）。改稿范围收敛在涉事段落，其余内容原样保留。
+function applyVerdictInstruction(verdict: CrossValidationVerdict): string {
+  const lines = ['按以下核查意见修改全文，只改涉及的段落，保留其余内容：'];
+  if (verdict.issues.length > 0) {
+    lines.push('问题：');
+    for (const issue of verdict.issues) lines.push(`- ${issue}`);
+  }
+  if (verdict.suggestions.length > 0) {
+    lines.push('建议：');
+    for (const suggestion of verdict.suggestions) lines.push(`- ${suggestion}`);
+  }
+  return lines.join('\n');
 }
 
 function resolveTemplateFromInstruction(instruction: string, currentId: string) {

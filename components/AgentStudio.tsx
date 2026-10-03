@@ -218,7 +218,7 @@ export function AgentStudio({ onClose }: AgentStudioProps) {
                   <div
                     key={index}
                     className={cn(
-                      'max-w-[85%] rounded-xl px-3 py-2 text-[12.5px] leading-relaxed whitespace-pre-wrap',
+                      'max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap',
                       message.role === 'user' ? 'self-end bg-ink text-white' : 'self-start bg-white text-ink border border-ink-line',
                     )}
                   >
@@ -281,7 +281,7 @@ export function AgentStudio({ onClose }: AgentStudioProps) {
                 </Button>
               </div>
               {trialArticle && (
-                <div className="mt-3 max-h-72 overflow-y-auto whitespace-pre-wrap rounded-xl border border-ink-line bg-ink-panel/40 p-3 text-[12.5px] leading-relaxed text-ink">
+                <div className="mt-3 max-h-72 overflow-y-auto whitespace-pre-wrap rounded-xl border border-ink-line bg-ink-panel/40 p-3 text-xs leading-relaxed text-ink">
                   {trialArticle}
                 </div>
               )}

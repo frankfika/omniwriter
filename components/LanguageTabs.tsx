@@ -44,7 +44,7 @@ export function LanguageTabs({
       </LanguageTab>
       <LanguageTab active={value === 'en'} compact={compact} tabIndex={value === 'en' ? 0 : -1} onClick={() => onChange('en')}>
         English
-        {!hasEnglish && <span className="ml-1 text-[9px] font-normal opacity-60">待生成</span>}
+        {!hasEnglish && <span className="ml-1 text-xs font-normal opacity-60">待生成</span>}
       </LanguageTab>
     </div>
   );

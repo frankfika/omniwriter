@@ -8,7 +8,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
 import CharacterCount from '@tiptap/extension-character-count';
-import { Bold, Italic, Heading1, Heading2, List, Quote, Code, Images } from 'lucide-react';
+import { Bold, Heading1, Heading2, List, Quote, Images } from 'lucide-react';
 import { cn } from './ui/cn';
 import { downscaleImage, blobToDataUrl } from '@/src/lib/images';
 
@@ -158,16 +158,14 @@ export function Editor({
 
   return (
     <div className={cn('flex flex-col h-full', className)}>
-      <div className="sticky top-0 z-10 border-b border-ink-line bg-white/80 backdrop-blur">
+      <div className="sticky top-0 z-10 border-b border-ink-line bg-white">
         <div className="mx-auto max-w-prose flex items-center gap-1 overflow-x-auto px-4 py-2">
           <ToolbarBtn on={editor.isActive('heading', { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} title="一级标题" aria-label="H1"><Heading1 size={16}/></ToolbarBtn>
           <ToolbarBtn on={editor.isActive('heading', { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="二级标题" aria-label="H2"><Heading2 size={16}/></ToolbarBtn>
           <Sep/>
           <ToolbarBtn on={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} title="加粗" aria-label="加粗"><Bold size={16}/></ToolbarBtn>
-          <ToolbarBtn on={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()} title="斜体" aria-label="斜体"><Italic size={16}/></ToolbarBtn>
           <ToolbarBtn on={editor.isActive('blockquote')} onClick={() => editor.chain().focus().toggleBlockquote().run()} title="引用" aria-label="引用"><Quote size={16}/></ToolbarBtn>
           <ToolbarBtn on={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()} title="无序列表" aria-label="列表"><List size={16}/></ToolbarBtn>
-          <ToolbarBtn on={editor.isActive('code')} onClick={() => editor.chain().focus().toggleCode().run()} title="行内代码" aria-label="代码"><Code size={16}/></ToolbarBtn>
           <Sep/>
           {/* 插入图片只保留「联网配图」入口；本地图片走粘贴/拖放（insertImageFile）。
               之前的 window.prompt 任意 URL 死代码已删除（iOS 键盘问题 + 危险 scheme 持久化的 XSS 风险）。 */}
@@ -181,7 +179,7 @@ export function Editor({
               <Images size={16}/> 配图
             </button>
           )}
-          <div className="ml-auto shrink-0 text-[11px] text-ink-muted tabular-nums">{chars} 字</div>
+          <div className="ml-auto shrink-0 text-xs text-ink-muted tabular-nums">{chars} 字</div>
         </div>
       </div>
       <EditorContent editor={editor} className="flex-1 overflow-y-auto" />

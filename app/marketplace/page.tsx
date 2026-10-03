@@ -180,7 +180,7 @@ export default function MarketplacePage() {
               <div className="inline-flex items-center gap-1.5 text-xs uppercase tracking-[1.4px] text-ink-muted mb-3">
                 <Blocks size={13}/> OmniWriter 能力市场
               </div>
-              <h1 className="text-[28px] sm:text-[32px] font-bold tracking-tightish leading-tight mb-2">按需要组合能力，不用自己搭工作流</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tightish leading-tight mb-2">按需要组合能力，不用自己搭工作流</h1>
               <p className="max-w-2xl text-sm leading-relaxed text-ink-soft">
                 市场不是另一个创作入口。Agent 用来带预设新建任务；风格和模板成为新内容默认；插件由系统按需自动调用。
               </p>
@@ -230,7 +230,7 @@ export default function MarketplacePage() {
           {tab === 'agents' ? (
             <div className="space-y-8">
               <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-ink-line bg-ink-panel/50 px-4 py-3">
-                <p className="text-[12px] leading-relaxed text-ink-soft">没有合手的流程？喂几篇范文，孵化一个只属于你的写作 Agent。</p>
+                <p className="text-xs leading-relaxed text-ink-soft">没有合手的流程？喂几篇范文，孵化一个只属于你的写作 Agent。</p>
                 <Button size="sm" onClick={() => setStudioOpen(true)} className="shrink-0"><Plus size={13}/>创建 Agent</Button>
               </div>
               {Object.entries(GROUP_LABELS).map(([group, label]) => {
@@ -336,7 +336,7 @@ function TemplateCard({ template, isDefault, onDefault }: { template: WechatTemp
           <div className="min-w-0 flex-1"><h3 className="text-sm font-semibold">{template.name}</h3><p className="text-xs text-ink-muted mt-0.5">{template.tagline}</p></div>
           <span className="text-xs rounded-full border border-ink-line px-2 py-0.5 text-ink-muted">{template.status === 'built-in' ? '内置' : '市场'}</span>
         </div>
-        <p className="mt-3 text-[12.5px] text-ink-soft leading-relaxed">{template.description}</p>
+        <p className="mt-3 text-xs text-ink-soft leading-relaxed">{template.description}</p>
         <div className="mt-3 flex flex-wrap gap-1">{template.tags.map((tag) => <span key={tag} className="rounded-full bg-ink-panel px-2 py-0.5 text-xs text-ink-muted">{tag}</span>)}</div>
         <div className="mt-4 pt-3 border-t border-ink-line flex justify-end">
           <Button size="sm" variant={isDefault ? 'secondary' : 'outline'} onClick={onDefault} disabled={isDefault}>{isDefault ? <><Check size={12}/>默认模板</> : '设为默认'}</Button>
@@ -357,8 +357,8 @@ function StyleCard({ style, isDefault, onDefault }: { style: WritingStylePreset;
         </div>
         {isDefault && <span className="ml-auto text-xs rounded-full bg-ink px-2 py-0.5 text-white">默认</span>}
       </div>
-      <p className="text-[12.5px] text-ink-soft leading-relaxed mb-3">{style.description}</p>
-      <blockquote className="rounded-lg bg-ink-panel/70 px-3 py-2.5 text-[11.5px] leading-relaxed text-ink-soft mb-3">“{style.sample}”</blockquote>
+      <p className="text-xs text-ink-soft leading-relaxed mb-3">{style.description}</p>
+      <blockquote className="rounded-lg bg-ink-panel/70 px-3 py-2.5 text-xs leading-relaxed text-ink-soft mb-3">“{style.sample}”</blockquote>
       <div className="flex flex-wrap gap-1 mb-4">{style.bestFor.map((item) => <span key={item} className="rounded-full border border-ink-line px-2 py-0.5 text-xs text-ink-muted">{item}</span>)}</div>
       <div className="mt-auto pt-3 border-t border-ink-line flex items-center justify-between gap-3">
         <span className="text-xs text-ink-muted truncate">{style.sourceNote}</span>
@@ -396,7 +396,7 @@ function AgentMarketCard({ agent, override, onUse, onConfigure, onDelete, delete
             ? <span className="ml-auto text-xs rounded-full bg-ink-panel px-2 py-0.5 text-ink">已定制</span>
             : <span className="ml-auto text-xs rounded-full border border-ink-line px-2 py-0.5 text-ink-muted">内置</span>}
       </div>
-      <p className="text-[12.5px] text-ink-soft leading-relaxed mb-3">{agent.description}</p>
+      <p className="text-xs text-ink-soft leading-relaxed mb-3">{agent.description}</p>
       <div className="flex flex-wrap gap-1 mb-4">
         <span className="rounded-full bg-ink text-white px-2 py-0.5 text-xs">{writingStyle.name}</span>
         {effectivePlatforms.slice(0, 4).map((platform) => (
@@ -438,7 +438,7 @@ function PluginCard({ plugin }: { plugin: CreatorPlugin }) {
           <p className="text-xs text-ink-muted mt-0.5">{plugin.capability}</p>
         </div>
       </div>
-      <p className="text-[12.5px] text-ink-soft leading-relaxed mb-4">{plugin.description}</p>
+      <p className="text-xs text-ink-soft leading-relaxed mb-4">{plugin.description}</p>
       <div className="mt-auto pt-3 border-t border-ink-line flex items-center justify-between">
         <span className="text-xs uppercase tracking-wide text-ink-muted">{PLUGIN_GROUP_LABELS[plugin.group]}</span>
         {builtIn ? (

@@ -35,11 +35,14 @@ export function GenerationProgress({
     return () => window.clearInterval(timer);
   }, []);
 
-  // 流面板内容变化时自动滚到底部，让最新正文始终可见。
+  // 流面板内容变化时，只有用户仍然贴底才自动滚到底部。是否贴底在 onScroll 里
+  // 记录（那一刻内容还没变长）；不能在 effect 里算距底距离，那时内容已经变长，
+  // 算出来一定 > 80，之后就再也不自动滚了。
   const streamRef = React.useRef<HTMLDivElement | null>(null);
+  const stickRef = React.useRef(true);
   React.useEffect(() => {
     const el = streamRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el && stickRef.current) el.scrollTop = el.scrollHeight;
   }, [state.preview]);
 
   const seconds = Math.max(0, Math.floor((now - state.startedAt) / 1000));
@@ -77,14 +80,27 @@ export function GenerationProgress({
 
       <div
         ref={streamRef}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+        }}
         className="mt-4 max-h-72 overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-ink-soft"
       >
-        {state.preview || '等待第一段正文…'}
+        {state.preview ? denoise(state.preview) : '等待第一段正文…'}
       </div>
 
       <p className="mt-4 text-xs leading-relaxed text-ink-muted">完成后自动进入编辑器，停止不会覆盖已有内容。</p>
     </div>
   );
+}
+
+// 去掉 preview 里的 markdown 噪音符号：行首标题井号和所有 **。
+// ** 不按成对匹配：preview 是 slice(-1500) 截出来的，开头可能截断一对 **。
+// 行首的 - 保留（列表符号比裸井号可读）。
+function denoise(md: string): string {
+  return md
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\*\*/g, '');
 }
 
 function getStageCopy(state: GenerationViewState) {
