@@ -98,7 +98,8 @@ export async function POST(req: NextRequest) {
                 lastSentAt = now;
                 send({
                   type: 'delta', requestId, chars: snapshot.length,
-                  preview: snapshot.slice(-180).replace(/\s+/g, ' ').trim(), at: now,
+                  // 保留换行的 1500 字尾部快照：客户端流面板按段落展示，压成单行会读不了。
+                  preview: snapshot.slice(-1500), at: now,
                 });
               }
             },
@@ -114,7 +115,7 @@ export async function POST(req: NextRequest) {
           if (md.length - lastSentChars > 0) {
             send({
               type: 'delta', requestId, chars: md.length,
-              preview: md.slice(-180).replace(/\s+/g, ' ').trim(), at: Date.now(),
+              preview: md.slice(-1500), at: Date.now(),
             });
           }
 

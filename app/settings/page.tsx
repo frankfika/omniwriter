@@ -176,7 +176,7 @@ export default function SettingsPage() {
                   <div className="border-t border-ink-line bg-ink-panel/25 p-5 sm:p-6">
                     <div className="max-w-xl space-y-4">
                       <div>
-                        <div className="flex items-center gap-2 mb-1"><span className="text-sm font-semibold">使用自己的 API Key</span><span className="text-[10px] rounded-full bg-ink px-2 py-0.5 text-white">推荐</span></div>
+                        <div className="flex items-center gap-2 mb-1"><span className="text-sm font-semibold">使用自己的 API Key</span><span className="text-xs rounded-full bg-ink px-2 py-0.5 text-white">推荐</span></div>
                         <p className="text-xs text-ink-muted">默认使用 MiniMax。粘贴密钥后自动保存，不需要重启应用。</p>
                       </div>
                       <Field label="API Key">
@@ -191,7 +191,7 @@ export default function SettingsPage() {
                       </details>
                       <div className="flex flex-wrap items-center gap-3">
                         <Button size="sm" onClick={checkConnection} disabled={checking || (!hasClientKey && !aiReady)}>{checking ? '正在请求模型…' : '测试真实连接'}</Button>
-                        <span className="text-[11px] text-ink-muted">密钥保存在当前浏览器，只在生成请求时交给本应用服务端调用模型。</span>
+                        <span className="text-xs text-ink-muted">密钥保存在当前浏览器，只在生成请求时交给本应用服务端调用模型。</span>
                       </div>
                       {connectionResult && (
                         <div className={cn('rounded-lg border px-3 py-2 text-xs', connectionResult.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-700')}>
@@ -223,7 +223,7 @@ export default function SettingsPage() {
               <SettingsPanel title="默认发布平台" description="新建空白文章时默认选中；Agent 仍会根据任务给出更合适的平台组合。">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex flex-wrap gap-1.5">{PLATFORM_ORDER.map((platform) => <button key={platform} onClick={() => togglePlatform(platform)} className={cn('h-10 px-3 rounded-full text-sm border transition-colors sm:h-7 sm:px-2.5 sm:text-xs', cfg.defaultPlatforms.includes(platform) ? 'bg-ink text-white border-ink' : 'bg-white text-ink-soft border-ink-line hover:border-ink')}>{PLATFORMS[platform].label}</button>)}</div>
-                  <button type="button" onClick={() => update({ defaultPlatforms: [...DEFAULT_CONFIG.defaultPlatforms] })} className="text-[11px] text-indigo-700 hover:underline shrink-0">恢复默认</button>
+                  <button type="button" onClick={() => update({ defaultPlatforms: [...DEFAULT_CONFIG.defaultPlatforms] })} className="text-xs text-ink hover:underline shrink-0">恢复默认</button>
                 </div>
               </SettingsPanel>
               <SettingsPanel title="公众号排版" description="应用到实时预览、富文本复制和离线发布包。">
@@ -243,7 +243,7 @@ export default function SettingsPage() {
                   <Link href="/marketplace" className="h-8 px-3 rounded-md border border-ink-line inline-flex items-center justify-center gap-1.5 text-sm font-medium hover:bg-ink-panel">打开能力市场 <ArrowRight size={13}/></Link>
                 </div>
                 <div className="divide-y divide-ink-line border-y border-ink-line">
-                  {builtInPlugins.map((plugin) => <div key={plugin.id} className="py-3 flex items-center gap-3"><div className="size-7 rounded-md bg-ink-panel flex items-center justify-center"><Check size={13}/></div><div className="min-w-0 flex-1"><div className="text-sm font-medium">{plugin.name}</div><div className="text-[11px] text-ink-muted truncate">{plugin.capability}</div></div><span className="text-[11px] text-emerald-700">已启用</span></div>)}
+                  {builtInPlugins.map((plugin) => <div key={plugin.id} className="py-3 flex items-center gap-3"><div className="size-7 rounded-md bg-ink-panel flex items-center justify-center"><Check size={13}/></div><div className="min-w-0 flex-1"><div className="text-sm font-medium">{plugin.name}</div><div className="text-xs text-ink-muted truncate">{plugin.capability}</div></div><span className="text-xs text-emerald-700">已启用</span></div>)}
                 </div>
               </section>
               <p className="text-xs text-ink-muted px-1">插件增强 Agent 的能力，但不会改变“素材 → 母稿 → 编辑 → 平台适配 → 发布”的主流程。</p>
@@ -293,7 +293,7 @@ function Field({ label, children, onReset }: { label: string; children: React.Re
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <label className="block text-xs font-medium text-ink-soft">{label}</label>
         {onReset && (
-          <button type="button" onClick={onReset} className="text-[11px] text-indigo-700 hover:underline">恢复默认</button>
+          <button type="button" onClick={onReset} className="text-xs text-ink hover:underline">恢复默认</button>
         )}
       </div>
       {children}

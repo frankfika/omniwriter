@@ -106,7 +106,7 @@ export function AvailabilityStatus() {
     <div
       role="status"
       aria-live="polite"
-      className={`fixed bottom-4 left-1/2 z-[100] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-full border px-4 py-2 text-xs font-medium shadow-lg backdrop-blur-xl ${
+      className={`fixed bottom-4 left-1/2 z-[100] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-full border px-4 py-2 text-xs font-medium shadow-sm ${
         !unavailable
           ? 'border-emerald-200 bg-emerald-50/95 text-emerald-800'
           : 'border-amber-200 bg-amber-50/95 text-amber-900'

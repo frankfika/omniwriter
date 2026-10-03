@@ -157,7 +157,7 @@ export function AgentStudio({ onClose }: AgentStudioProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="创建 Agent">
       <button type="button" aria-label="关闭" className="absolute inset-0 cursor-default" onClick={() => onClose(null)}/>
-      <div className="relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl">
+      <div className="relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-sm sm:rounded-2xl">
         <div className="flex items-center justify-between border-b border-ink-line px-5 py-3.5">
           <h2 className="text-sm font-semibold">孵化自己的 Agent</h2>
           <button type="button" aria-label="关闭" onClick={() => onClose(null)} className="rounded-lg p-1.5 text-ink-muted hover:bg-ink-panel"><X size={16}/></button>
@@ -176,7 +176,7 @@ export function AgentStudio({ onClose }: AgentStudioProps) {
                 <Plus size={12}/>加一条
               </Button>
             </div>
-            <p className="mb-2 text-[11px] text-ink-muted">贴 1–5 篇你欣赏的文章全文，AI 会从中提炼写作指令。</p>
+            <p className="mb-2 text-xs text-ink-muted">贴 1–5 篇你欣赏的文章全文，AI 会从中提炼写作指令。</p>
             <div className="flex flex-col gap-2">
               {samples.map((sample, index) => (
                 <div key={index} className="relative">
@@ -225,7 +225,7 @@ export function AgentStudio({ onClose }: AgentStudioProps) {
                     {message.content}
                   </div>
                 ))}
-                {busy === 'revise' && <div className="self-start text-[11px] text-ink-muted">正在按反馈修订指令…</div>}
+                {busy === 'revise' && <div className="self-start text-xs text-ink-muted">正在按反馈修订指令…</div>}
               </div>
               <div className="mt-2 flex gap-2">
                 <Input

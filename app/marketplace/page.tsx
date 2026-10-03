@@ -177,7 +177,7 @@ export default function MarketplacePage() {
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-8 sm:py-10">
           <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5 mb-8">
             <div>
-              <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[1.4px] text-ink-muted mb-3">
+              <div className="inline-flex items-center gap-1.5 text-xs uppercase tracking-[1.4px] text-ink-muted mb-3">
                 <Blocks size={13}/> OmniWriter 能力市场
               </div>
               <h1 className="text-[28px] sm:text-[32px] font-bold tracking-tightish leading-tight mb-2">按需要组合能力，不用自己搭工作流</h1>
@@ -190,11 +190,11 @@ export default function MarketplacePage() {
             </div>
           </div>
 
-          <section aria-label="能力市场使用方法" className="mb-6 rounded-2xl border border-indigo-100 bg-gradient-to-r from-white to-indigo-50/70 p-4 shadow-sm sm:p-5">
+          <section aria-label="能力市场使用方法" className="mb-6 rounded-2xl border border-ink-line bg-white p-4 shadow-sm sm:p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
               <div className="flex items-center gap-3 lg:w-48 lg:shrink-0">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-900 to-indigo-700 text-white"><WandSparkles size={17}/></span>
-                <div><h2 className="text-sm font-semibold text-ink">怎么组合</h2><p className="mt-0.5 text-[10px] text-ink-muted">选择是可选的，创作台也会自动判断</p></div>
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-ink text-white"><WandSparkles size={17}/></span>
+                <div><h2 className="text-sm font-semibold text-ink">怎么组合</h2><p className="mt-0.5 text-xs text-ink-muted">选择是可选的，创作台也会自动判断</p></div>
               </div>
               <div className="grid flex-1 grid-cols-2 gap-2 sm:grid-cols-4">
                 <MarketGuideStep index="1" title="Agent" detail="带预设新建任务"/>
@@ -202,7 +202,7 @@ export default function MarketplacePage() {
                 <MarketGuideStep index="3" title="模板" detail="设为以后默认"/>
                 <MarketGuideStep index="4" title="插件" detail="执行时自动调用"/>
               </div>
-              <button type="button" onClick={() => router.push('/')} className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-slate-900 px-4 text-xs font-semibold text-white hover:bg-indigo-800">
+              <button type="button" onClick={() => router.push('/')} className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-ink px-4 text-xs font-semibold text-white hover:bg-ink-soft">
                 回创作台 <ArrowRight size={13}/>
               </button>
             </div>
@@ -222,14 +222,14 @@ export default function MarketplacePage() {
             <MarketTabButton active={tab === 'plugins'} onClick={() => setTab('plugins')} icon={<Blocks size={14}/>} label={`插件 · ${CREATOR_PLUGINS.length}`}/>
           </div>
 
-          <div className="mb-7 flex min-h-10 items-center justify-between gap-3 rounded-xl border border-white bg-white/55 px-3 py-2 text-[11px] leading-relaxed text-ink-muted">
+          <div className="mb-7 flex min-h-10 items-center justify-between gap-3 rounded-xl border border-ink-line bg-white px-3 py-2 text-xs leading-relaxed text-ink-muted">
             <span>{tab === 'agents' ? '选择一个 Agent 会立即新建内容，并带入适合的写作方式、平台和内置能力。' : tab === 'styles' ? '设为通用默认后，只影响之后新建的内容；每篇文章仍可单独调整。' : tab === 'templates' ? '设为默认后，新内容的公众号预览、富文本复制和 ZIP 导出会使用该模板。' : '已启用插件无需安装或手动添加；Agent 会在读取素材、质检、配图、分发和导出时自动调用。'}</span>
-            {tab === 'styles' && defaultStyle && <button type="button" onClick={clearDefaultStyle} className="min-h-10 shrink-0 rounded-lg px-2 font-medium text-indigo-700 hover:bg-white sm:min-h-8">恢复自动选择</button>}
+            {tab === 'styles' && defaultStyle && <button type="button" onClick={clearDefaultStyle} className="min-h-10 shrink-0 rounded-lg px-2 font-medium text-ink hover:bg-white sm:min-h-8">恢复自动选择</button>}
           </div>
 
           {tab === 'agents' ? (
             <div className="space-y-8">
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/50 px-4 py-3">
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-ink-line bg-ink-panel/50 px-4 py-3">
                 <p className="text-[12px] leading-relaxed text-ink-soft">没有合手的流程？喂几篇范文，孵化一个只属于你的写作 Agent。</p>
                 <Button size="sm" onClick={() => setStudioOpen(true)} className="shrink-0"><Plus size={13}/>创建 Agent</Button>
               </div>
@@ -240,7 +240,7 @@ export default function MarketplacePage() {
                   <section key={group}>
                     <div className="flex items-baseline gap-2 mb-3">
                       <h2 className="text-sm font-semibold">{label}</h2>
-                      <span className="text-[11px] text-ink-muted">{items.length} 个创作流程</span>
+                      <span className="text-xs text-ink-muted">{items.length} 个创作流程</span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                       {items.map((agent) => (
@@ -269,7 +269,7 @@ export default function MarketplacePage() {
                   <section key={group}>
                     <div className="flex items-baseline gap-2 mb-3">
                       <h2 className="text-sm font-semibold">{label}</h2>
-                      <span className="text-[11px] text-ink-muted">可与任意 Agent 组合</span>
+                      <span className="text-xs text-ink-muted">可与任意 Agent 组合</span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                       {items.map((style) => <StyleCard key={style.id} style={style} isDefault={defaultStyle === style.id} onDefault={() => makeDefaultStyle(style)}/>) }
@@ -283,7 +283,7 @@ export default function MarketplacePage() {
             <section>
               <div className="flex items-baseline gap-2 mb-3">
                 <h2 className="text-sm font-semibold">公众号排版</h2>
-                <span className="text-[11px] text-ink-muted">预览、复制与导出共用同一模板</span>
+                <span className="text-xs text-ink-muted">预览、复制与导出共用同一模板</span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                 {templates.map((template) => (
@@ -306,7 +306,7 @@ export default function MarketplacePage() {
                   <section key={group}>
                     <div className="flex items-baseline gap-2 mb-3">
                       <h2 className="text-sm font-semibold">{label}</h2>
-                      <span className="text-[11px] text-ink-muted">Agent 可调用的创作能力</span>
+                      <span className="text-xs text-ink-muted">Agent 可调用的创作能力</span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                       {items.map((plugin) => <PluginCard key={plugin.id} plugin={plugin}/>)}
@@ -333,11 +333,11 @@ function TemplateCard({ template, isDefault, onDefault }: { template: WechatTemp
       </div>
       <div className="flex flex-1 flex-col p-4">
         <div className="flex items-start gap-3">
-          <div className="min-w-0 flex-1"><h3 className="text-sm font-semibold">{template.name}</h3><p className="text-[11px] text-ink-muted mt-0.5">{template.tagline}</p></div>
-          <span className="text-[10px] rounded-full border border-ink-line px-2 py-0.5 text-ink-muted">{template.status === 'built-in' ? '内置' : '市场'}</span>
+          <div className="min-w-0 flex-1"><h3 className="text-sm font-semibold">{template.name}</h3><p className="text-xs text-ink-muted mt-0.5">{template.tagline}</p></div>
+          <span className="text-xs rounded-full border border-ink-line px-2 py-0.5 text-ink-muted">{template.status === 'built-in' ? '内置' : '市场'}</span>
         </div>
         <p className="mt-3 text-[12.5px] text-ink-soft leading-relaxed">{template.description}</p>
-        <div className="mt-3 flex flex-wrap gap-1">{template.tags.map((tag) => <span key={tag} className="rounded-full bg-ink-panel px-2 py-0.5 text-[10px] text-ink-muted">{tag}</span>)}</div>
+        <div className="mt-3 flex flex-wrap gap-1">{template.tags.map((tag) => <span key={tag} className="rounded-full bg-ink-panel px-2 py-0.5 text-xs text-ink-muted">{tag}</span>)}</div>
         <div className="mt-4 pt-3 border-t border-ink-line flex justify-end">
           <Button size="sm" variant={isDefault ? 'secondary' : 'outline'} onClick={onDefault} disabled={isDefault}>{isDefault ? <><Check size={12}/>默认模板</> : '设为默认'}</Button>
         </div>
@@ -353,15 +353,15 @@ function StyleCard({ style, isDefault, onDefault }: { style: WritingStylePreset;
         <div className="size-10 shrink-0 rounded-lg bg-ink-panel flex items-center justify-center text-sm font-semibold font-mono">{style.symbol}</div>
         <div className="min-w-0">
           <h3 className="text-sm font-semibold">{style.name}</h3>
-          <p className="text-[11px] text-ink-muted mt-0.5">{style.tagline}</p>
+          <p className="text-xs text-ink-muted mt-0.5">{style.tagline}</p>
         </div>
-        {isDefault && <span className="ml-auto text-[10px] rounded-full bg-ink px-2 py-0.5 text-white">默认</span>}
+        {isDefault && <span className="ml-auto text-xs rounded-full bg-ink px-2 py-0.5 text-white">默认</span>}
       </div>
       <p className="text-[12.5px] text-ink-soft leading-relaxed mb-3">{style.description}</p>
       <blockquote className="rounded-lg bg-ink-panel/70 px-3 py-2.5 text-[11.5px] leading-relaxed text-ink-soft mb-3">“{style.sample}”</blockquote>
-      <div className="flex flex-wrap gap-1 mb-4">{style.bestFor.map((item) => <span key={item} className="rounded-full border border-ink-line px-2 py-0.5 text-[10px] text-ink-muted">{item}</span>)}</div>
+      <div className="flex flex-wrap gap-1 mb-4">{style.bestFor.map((item) => <span key={item} className="rounded-full border border-ink-line px-2 py-0.5 text-xs text-ink-muted">{item}</span>)}</div>
       <div className="mt-auto pt-3 border-t border-ink-line flex items-center justify-between gap-3">
-        <span className="text-[10px] text-ink-muted truncate">{style.sourceNote}</span>
+        <span className="text-xs text-ink-muted truncate">{style.sourceNote}</span>
         <Button size="sm" variant={isDefault ? 'secondary' : 'outline'} onClick={onDefault} disabled={isDefault} className="shrink-0">{isDefault ? <><Check size={12}/>通用默认</> : '设为通用默认'}</Button>
       </div>
     </article>
@@ -388,32 +388,32 @@ function AgentMarketCard({ agent, override, onUse, onConfigure, onDelete, delete
         <div className="size-10 shrink-0 rounded-lg bg-ink-panel flex items-center justify-center text-xl">{agent.emoji}</div>
         <div className="min-w-0">
           <h3 className="text-sm font-semibold leading-snug">{agent.name}</h3>
-          <p className="text-[11px] text-ink-muted mt-0.5">{agent.tagline}</p>
+          <p className="text-xs text-ink-muted mt-0.5">{agent.tagline}</p>
         </div>
         {isCustom
-          ? <span className="ml-auto text-[10px] rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700">自定义</span>
+          ? <span className="ml-auto text-xs rounded-full bg-ink-panel px-2 py-0.5 text-ink">自定义</span>
           : customized
-            ? <span className="ml-auto text-[10px] rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700">已定制</span>
-            : <span className="ml-auto text-[10px] rounded-full border border-ink-line px-2 py-0.5 text-ink-muted">内置</span>}
+            ? <span className="ml-auto text-xs rounded-full bg-ink-panel px-2 py-0.5 text-ink">已定制</span>
+            : <span className="ml-auto text-xs rounded-full border border-ink-line px-2 py-0.5 text-ink-muted">内置</span>}
       </div>
       <p className="text-[12.5px] text-ink-soft leading-relaxed mb-3">{agent.description}</p>
       <div className="flex flex-wrap gap-1 mb-4">
-        <span className="rounded-full bg-ink text-white px-2 py-0.5 text-[10px]">{writingStyle.name}</span>
+        <span className="rounded-full bg-ink text-white px-2 py-0.5 text-xs">{writingStyle.name}</span>
         {effectivePlatforms.slice(0, 4).map((platform) => (
-          <span key={platform} className="rounded-full bg-ink-panel px-2 py-0.5 text-[10px] text-ink-soft">{PLATFORMS[platform].label}</span>
+          <span key={platform} className="rounded-full bg-ink-panel px-2 py-0.5 text-xs text-ink-soft">{PLATFORMS[platform].label}</span>
         ))}
-        {effectivePlatforms.length > 4 && <span className="rounded-full bg-ink-panel px-2 py-0.5 text-[10px] text-ink-muted">+{effectivePlatforms.length - 4}</span>}
+        {effectivePlatforms.length > 4 && <span className="rounded-full bg-ink-panel px-2 py-0.5 text-xs text-ink-muted">+{effectivePlatforms.length - 4}</span>}
       </div>
       {agent.pluginIds.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-1">
-          <span className="text-[10px] text-ink-muted mr-0.5">调用</span>
+          <span className="text-xs text-ink-muted mr-0.5">调用</span>
           {agent.pluginIds.slice(0, 3).map((id) => CREATOR_PLUGIN_MAP[id]).filter(Boolean).map((plugin) => (
-            <span key={plugin.id} className="rounded-full border border-ink-line px-2 py-0.5 text-[10px] text-ink-soft">{plugin.name}</span>
+            <span key={plugin.id} className="rounded-full border border-ink-line px-2 py-0.5 text-xs text-ink-soft">{plugin.name}</span>
           ))}
         </div>
       )}
       <div className="mt-auto flex items-center justify-between gap-2 pt-3 border-t border-ink-line">
-        <span className="text-[11px] text-ink-muted truncate pr-1">{agent.inputHint}</span>
+        <span className="text-xs text-ink-muted truncate pr-1">{agent.inputHint}</span>
         <div className="flex shrink-0 items-center gap-1.5">
           {onDelete && (
             <Button size="sm" variant="ghost" onClick={onDelete} aria-label={deletePending ? `再次点击确认删除 ${agent.name}` : `删除 ${agent.name}`} title={deletePending ? '再次点击以确认删除（3 秒内有效）' : '删除这个自定义 Agent'} className={cn(deletePending && 'bg-red-50 text-red-600 ring-1 ring-red-200')}><Trash2 size={13}/></Button>
@@ -435,16 +435,16 @@ function PluginCard({ plugin }: { plugin: CreatorPlugin }) {
         <div className="size-9 shrink-0 rounded-lg bg-ink-panel flex items-center justify-center"><Icon size={17}/></div>
         <div>
           <h3 className="text-sm font-semibold">{plugin.name}</h3>
-          <p className="text-[11px] text-ink-muted mt-0.5">{plugin.capability}</p>
+          <p className="text-xs text-ink-muted mt-0.5">{plugin.capability}</p>
         </div>
       </div>
       <p className="text-[12.5px] text-ink-soft leading-relaxed mb-4">{plugin.description}</p>
       <div className="mt-auto pt-3 border-t border-ink-line flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-wide text-ink-muted">{PLUGIN_GROUP_LABELS[plugin.group]}</span>
+        <span className="text-xs uppercase tracking-wide text-ink-muted">{PLUGIN_GROUP_LABELS[plugin.group]}</span>
         {builtIn ? (
-          <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700"><Check size={12}/>自动调用</span>
+          <span className="inline-flex items-center gap-1 text-xs text-emerald-700"><Check size={12}/>自动调用</span>
         ) : (
-          <span className="text-[11px] text-ink-muted">即将开放</span>
+          <span className="text-xs text-ink-muted">即将开放</span>
         )}
       </div>
     </article>
@@ -457,9 +457,9 @@ function EmptySearch() {
 
 function MarketGuideStep({ index, title, detail }: { index: string; title: string; detail: string }) {
   return (
-    <div className="rounded-xl border border-white bg-white/80 px-3 py-2.5">
-      <div className="flex items-center gap-1.5"><span className="flex size-5 items-center justify-center rounded-full bg-indigo-50 text-[10px] font-bold text-indigo-700">{index}</span><span className="text-xs font-semibold text-ink">{title}</span></div>
-      <p className="mt-1 text-[10px] text-ink-muted">{detail}</p>
+    <div className="rounded-xl border border-ink-line bg-white px-3 py-2.5">
+      <div className="flex items-center gap-1.5"><span className="flex size-5 items-center justify-center rounded-full bg-ink-panel text-xs font-bold text-ink">{index}</span><span className="text-xs font-semibold text-ink">{title}</span></div>
+      <p className="mt-1 text-xs text-ink-muted">{detail}</p>
     </div>
   );
 }

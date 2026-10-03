@@ -146,17 +146,17 @@ export function RewriterLauncher({ compact = false }: { compact?: boolean }) {
   return (
     <div className={cn('w-full', !compact && 'mx-auto max-w-5xl')}>
       <div className={cn(
-        'rounded-3xl border border-white/90 bg-white/90 shadow-[0_24px_80px_rgba(79,70,229,0.13)] backdrop-blur-xl',
+        'rounded-3xl border border-ink-line bg-white',
         compact ? 'p-5' : 'p-6 sm:p-8',
       )}>
         <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900 sm:text-xl">洗稿 · 把别人的内容变成可发布的版本</h2>
+            <h2 className="text-lg font-semibold text-ink sm:text-xl">洗稿 · 把别人的内容变成可发布的版本</h2>
             <p className="mt-1 text-xs text-ink-muted sm:text-sm">
               贴一个推特 / 新闻 / GitHub 链接 → 自动抽取原文与媒体 → 改写成适配目标平台的新稿（保留原图）→ 一键复制到推特。
             </p>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50/60 px-3 py-1 text-[11px] font-medium text-indigo-700">
+          <div className="inline-flex items-center gap-2 rounded-full border border-ink-line bg-ink-panel/60 px-3 py-1 text-xs font-medium text-ink">
             <span className={cn('size-1.5 rounded-full', aiReady ? 'bg-emerald-500' : 'bg-amber-500')} />
             {aiReady ? 'AI 已连接，可直接生成' : 'AI 未配置，生成前请先到设置填密钥'}
           </div>
@@ -172,13 +172,13 @@ export function RewriterLauncher({ compact = false }: { compact?: boolean }) {
             onKeyDown={(event) => { if (event.key === 'Enter') void submit(); }}
             placeholder="https://x.com/... / https://github.com/owner/repo / 新闻链接"
             aria-label="待改写的链接（X、新闻或 GitHub）"
-            className="w-full min-h-10 rounded-xl border border-ink-line/80 bg-white px-4 py-3 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            className="w-full min-h-10 rounded-xl border border-ink-line/80 bg-white px-4 py-3 text-sm focus:border-ink focus:outline-none focus:ring-2 focus:ring-indigo-100"
           />
           <button
             type="button"
             onClick={() => void submit()}
             disabled={!url.trim() || loading}
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-slate-900 to-indigo-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:shadow-md disabled:pointer-events-none disabled:opacity-40"
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-ink px-5 py-3 text-sm font-semibold text-white transition-all hover:bg-ink-soft disabled:pointer-events-none disabled:opacity-40"
           >
             {loading ? <Loader2 size={16} className="animate-spin"/> : <Wand2 size={16}/>}
             {loading ? '正在改写…' : '开始洗稿'}
@@ -187,7 +187,7 @@ export function RewriterLauncher({ compact = false }: { compact?: boolean }) {
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <div>
-            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-muted">目标平台</p>
+            <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-ink-muted">目标平台</p>
             <div className="flex flex-wrap gap-1.5">
               {TARGETS.map((option) => (
                 <button
@@ -197,8 +197,8 @@ export function RewriterLauncher({ compact = false }: { compact?: boolean }) {
                   className={cn(
                     'inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 sm:min-h-0 sm:py-1.5 text-xs transition-colors',
                     target === option.id
-                      ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
-                      : 'border-ink-line/70 bg-white text-ink-soft hover:border-indigo-200 hover:text-indigo-700',
+                      ? 'border-ink bg-ink-panel text-ink'
+                      : 'border-ink-line/70 bg-white text-ink-soft hover:border-ink hover:text-ink',
                   )}
                   title={option.helper}
                   aria-label={`目标平台：${option.label}（${option.helper}）`}
@@ -210,7 +210,7 @@ export function RewriterLauncher({ compact = false }: { compact?: boolean }) {
             </div>
           </div>
           <div>
-            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-muted">语气</p>
+            <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-ink-muted">语气</p>
             <div className="flex flex-wrap gap-1.5">
               {VOICES.map((option) => (
                 <button
@@ -220,8 +220,8 @@ export function RewriterLauncher({ compact = false }: { compact?: boolean }) {
                   className={cn(
                     'inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 sm:min-h-0 sm:py-1.5 text-xs transition-colors',
                     voice === option.id
-                      ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
-                      : 'border-ink-line/70 bg-white text-ink-soft hover:border-indigo-200 hover:text-indigo-700',
+                      ? 'border-ink bg-ink-panel text-ink'
+                      : 'border-ink-line/70 bg-white text-ink-soft hover:border-ink hover:text-ink',
                   )}
                   title={option.helper}
                   aria-label={`语气：${option.label}（${option.helper}）`}
@@ -235,14 +235,14 @@ export function RewriterLauncher({ compact = false }: { compact?: boolean }) {
         </div>
 
         <div className="mt-3">
-          <label htmlFor="rewriter-intent" className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-ink-muted">额外诉求（可选）</label>
+          <label htmlFor="rewriter-intent" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-ink-muted">额外诉求（可选）</label>
           <input
             id="rewriter-intent"
             value={intent}
             onChange={(event) => setIntent(event.target.value)}
             placeholder="例如：突出公司股价、保留原始链接、加一句我个人评论"
             aria-label="额外诉求（可选）"
-            className="w-full min-h-10 rounded-xl border border-ink-line/80 bg-white px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            className="w-full min-h-10 rounded-xl border border-ink-line/80 bg-white px-3 py-2 text-sm focus:border-ink focus:outline-none focus:ring-2 focus:ring-indigo-100"
           />
         </div>
 
@@ -265,17 +265,17 @@ export function RewriterLauncher({ compact = false }: { compact?: boolean }) {
       )}
 
       {response && (
-        <div className="mt-5 rounded-3xl border border-white/90 bg-white/90 p-6 shadow-[0_24px_80px_rgba(79,70,229,0.10)] backdrop-blur-xl">
+        <div className="mt-5 rounded-3xl border border-ink-line bg-white p-6">
           <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 className="text-base font-semibold text-slate-900">顺手找点 GitHub 截图当配图</h3>
+              <h3 className="text-base font-semibold text-ink">顺手找点 GitHub 截图当配图</h3>
               <p className="mt-1 text-xs text-ink-muted">根据原文标题 / 仓库名搜 GitHub 上的截图、Avatar、仓库列表，结果可直接插入到 X 帖。</p>
             </div>
             <button
               type="button"
               onClick={() => void handleGithubSearch()}
               disabled={githubSearching}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-ink-line bg-white px-4 sm:min-h-0 sm:py-2 text-sm font-medium text-ink hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-50"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-ink-line bg-white px-4 sm:min-h-0 sm:py-2 text-sm font-medium text-ink hover:border-ink hover:text-ink disabled:opacity-50"
             >
               {githubSearching ? <Loader2 size={14} className="animate-spin"/> : <Search size={14}/>}
               {githubSearching ? '搜索中…' : '搜 GitHub 截图'}
@@ -287,8 +287,8 @@ export function RewriterLauncher({ compact = false }: { compact?: boolean }) {
                 <li key={image.url} className="overflow-hidden rounded-xl border border-ink-line/60 bg-slate-50">
                   <img src={image.url} alt={image.alt} loading="lazy" className="aspect-video w-full object-cover"/>
                   <div className="p-2">
-                    <p className="truncate text-[11px] text-ink-soft">{image.alt}</p>
-                    <p className="truncate text-[10px] text-ink-muted">{image.source}</p>
+                    <p className="truncate text-xs text-ink-soft">{image.alt}</p>
+                    <p className="truncate text-xs text-ink-muted">{image.source}</p>
                   </div>
                 </li>
               ))}
@@ -306,15 +306,15 @@ function OriginalCard({ result }: { result: RewriteClientResponse['result'] }) {
   const isGithub = source.kind === 'github';
 
   return (
-    <article className="overflow-hidden rounded-3xl border border-white/90 bg-white/90 shadow-[0_24px_80px_rgba(79,70,229,0.10)] backdrop-blur-xl">
+    <article className="overflow-hidden rounded-3xl border border-ink-line bg-white">
       <header className="flex items-center justify-between gap-3 border-b border-ink-line/60 px-5 py-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-muted">原文</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-ink-muted">原文</p>
           <h3 className="mt-0.5 truncate text-sm font-semibold text-ink">
             {isTweet ? `@${source.author || source.title}` : source.title || source.url}
           </h3>
         </div>
-        <a href={source.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-ink-muted hover:text-indigo-700">
+        <a href={source.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-ink-muted hover:text-ink">
           <ExternalLink size={11}/>打开
         </a>
       </header>
@@ -323,7 +323,7 @@ function OriginalCard({ result }: { result: RewriteClientResponse['result'] }) {
       </div>
       {source.images.length > 0 && (
         <div className="border-t border-ink-line/60 px-5 py-3">
-          <p className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-ink-muted">
+          <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-ink-muted">
             <ImageIcon size={11}/>原图（{source.images.length}）会随新稿保留
           </p>
           <ul className="grid grid-cols-2 gap-2">
@@ -336,7 +336,7 @@ function OriginalCard({ result }: { result: RewriteClientResponse['result'] }) {
         </div>
       )}
       {isGithub && source.summary && (
-        <div className="border-t border-ink-line/60 bg-slate-50 px-5 py-3 text-[11px] text-ink-muted">
+        <div className="border-t border-ink-line/60 bg-ink-panel px-5 py-3 text-xs text-ink-muted">
           已读取 README 与仓库元数据；如需其他文件请直接打开原仓库。
         </div>
       )}
@@ -360,17 +360,17 @@ function RewriteCard({ result, verdict, verifying, onVerify, onCopy, onTwitterIn
   const charCount = Array.from(composeText).length;
 
   return (
-    <article className="overflow-hidden rounded-3xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-white to-sky-50 shadow-[0_24px_80px_rgba(79,70,229,0.12)] backdrop-blur-xl">
-      <header className="flex items-center justify-between gap-3 border-b border-indigo-100 px-5 py-3">
+    <article className="overflow-hidden rounded-3xl border border-ink-line bg-white">
+      <header className="flex items-center justify-between gap-3 border-b border-ink-line px-5 py-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-indigo-600">新稿 · {result.target}</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-ink-soft">新稿 · {result.target}</p>
           <h3 className="mt-0.5 truncate text-sm font-semibold text-ink">已按平台规则改写</h3>
         </div>
         <button
           type="button"
           onClick={onVerify}
           disabled={verifying}
-          className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-indigo-200 bg-white px-3 sm:min-h-0 sm:py-1.5 text-[11px] font-medium text-indigo-700 hover:border-indigo-400 disabled:opacity-50"
+          className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-ink-line bg-white px-3 sm:min-h-0 sm:py-1.5 text-xs font-medium text-ink hover:border-ink disabled:opacity-50"
         >
           {verifying ? <Loader2 size={11} className="animate-spin"/> : <ShieldCheck size={11}/>}
           {verifying ? '交叉验证中…' : '交叉验证'}
@@ -378,16 +378,16 @@ function RewriteCard({ result, verdict, verifying, onVerify, onCopy, onTwitterIn
       </header>
 
       <div className="space-y-3 px-5 py-4">
-        <div className="rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm">
-          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-900">{result.body}</p>
+        <div className="rounded-2xl border border-ink-line bg-white p-4 shadow-sm">
+          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-ink">{result.body}</p>
           {result.hashtags.length > 0 && (
-            <p className="mt-3 text-xs font-medium text-indigo-600">{result.hashtags.join(' ')}</p>
+            <p className="mt-3 text-xs font-medium text-ink-soft">{result.hashtags.join(' ')}</p>
           )}
         </div>
 
         {isX && (
-          <div className="rounded-2xl border border-white/80 bg-white/70 p-4 text-ink-soft">
-            <div className="flex items-center gap-2 text-[11px] text-ink-muted">
+          <div className="rounded-2xl border border-ink-line bg-white p-4 text-ink-soft">
+            <div className="flex items-center gap-2 text-xs text-ink-muted">
               <Twitter size={11}/> 推特预览 · {charCount} 字
               <span className={cn('ml-auto inline-flex items-center gap-1', charCount > 240 ? 'text-red-600' : 'text-emerald-600')}>
                 {charCount > 240 ? '超出 240 字，请裁剪' : '在字数限制内'}
@@ -399,16 +399,16 @@ function RewriteCard({ result, verdict, verifying, onVerify, onCopy, onTwitterIn
 
         {result.imagePlan.length > 0 && (
           <div>
-            <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-ink-muted">
+            <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-ink-muted">
               <ImageIcon size={11}/>推荐插图位置
             </p>
             <ul className="space-y-1.5">
               {result.imagePlan.map((plan, index) => (
-                <li key={`${plan.url}-${index}`} className="flex items-center gap-3 rounded-lg border border-ink-line/60 bg-white/80 p-2">
+                <li key={`${plan.url}-${index}`} className="flex items-center gap-3 rounded-lg border border-ink-line/60 bg-white p-2">
                   <img src={plan.url} alt={plan.alt} loading="lazy" className="size-12 rounded object-cover" referrerPolicy="no-referrer"/>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[11px] text-ink">{plan.alt}</p>
-                    <p className="text-[10px] text-ink-muted">{plan.position === 'after' ? '放在正文后第一张' : '放在正文最前'} · {plan.url}</p>
+                    <p className="truncate text-xs text-ink">{plan.alt}</p>
+                    <p className="text-xs text-ink-muted">{plan.position === 'after' ? '放在正文后第一张' : '放在正文最前'} · {plan.url}</p>
                   </div>
                 </li>
               ))}
@@ -440,15 +440,15 @@ function RewriteCard({ result, verdict, verifying, onVerify, onCopy, onTwitterIn
             )}
             {verdict.fallback && (
               <details className="mt-2">
-                <summary className="cursor-pointer text-[11px] font-medium">查看替代版本</summary>
-                <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-white/70 p-2 text-[11px] text-ink">{verdict.fallback}</pre>
+                <summary className="cursor-pointer text-xs font-medium">查看替代版本</summary>
+                <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-white p-2 text-xs text-ink">{verdict.fallback}</pre>
               </details>
             )}
           </div>
         )}
 
         {result.warnings.length > 0 && (
-          <ul className="space-y-1 rounded-2xl border border-amber-200 bg-amber-50/70 p-3 text-[11px] text-amber-700">
+          <ul className="space-y-1 rounded-2xl border border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-700">
             {result.warnings.map((warning, index) => (
               <li key={index}>· {warning}</li>
             ))}
@@ -456,11 +456,11 @@ function RewriteCard({ result, verdict, verifying, onVerify, onCopy, onTwitterIn
         )}
       </div>
 
-      <footer className="flex flex-wrap items-center gap-2 border-t border-indigo-100 bg-white/70 px-5 py-3">
+      <footer className="flex flex-wrap items-center gap-2 border-t border-ink-line bg-white px-5 py-3">
         <button
           type="button"
           onClick={onCopy}
-          className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-slate-900 px-3 sm:min-h-0 sm:py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+          className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-ink px-3 sm:min-h-0 sm:py-1.5 text-xs font-semibold text-white hover:bg-ink-soft"
         >
           {copyState === 'copied' ? <Check size={12}/> : <Copy size={12}/>}
           {copyState === 'copied' ? '已复制' : copyState === 'failed' ? '复制失败' : '复制新稿'}
@@ -476,7 +476,7 @@ function RewriteCard({ result, verdict, verifying, onVerify, onCopy, onTwitterIn
             <ArrowRight size={11}/>
           </a>
         )}
-        <span className="ml-auto text-[10px] text-ink-muted">via {result.via ?? 'unknown'}</span>
+        <span className="ml-auto text-xs text-ink-muted">via {result.via ?? 'unknown'}</span>
       </footer>
     </article>
   );

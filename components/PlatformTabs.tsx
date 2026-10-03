@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Copy, Check, Download, Eye, Image as ImageIcon, Loader2, ExternalLink, PencilLine, Sparkles, FileText } from 'lucide-react';
+import { Copy, Check, Download, Image as ImageIcon, Loader2, ExternalLink, Sparkles, FileText } from 'lucide-react';
 import { Button } from './ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { PLATFORMS } from '@/src/lib/platforms';
@@ -88,7 +88,7 @@ export function PlatformTabs({
   if (!available.length) {
     return (
       <div className="h-full min-h-[320px] flex flex-col items-center justify-center bg-white px-6 text-center">
-        <div className="size-11 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-700"><FileText size={18}/></div>
+        <div className="size-11 rounded-xl bg-ink-panel flex items-center justify-center text-ink-muted"><FileText size={18}/></div>
         <div className="mt-3 text-sm font-semibold">还没选择发布平台</div>
         <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-ink-muted">回到“素材”，在高级选项里勾选需要的平台；生成母稿后会自动同步生成。</p>
         <Button variant="outline" size="sm" onClick={onExportZip} className="mt-4">仅导出母稿 ZIP</Button>
@@ -107,12 +107,12 @@ export function PlatformTabs({
                 {(() => {
                   const parts = splitBilingualContent(article.platformDrafts[p] ?? '');
                   const ready = language === 'zh' ? parts.zh : parts.en;
-                  return ready.trim() ? <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-indigo-500"/> : null;
+                  return ready.trim() ? <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500"/> : null;
                 })()}
               </TabsTrigger>
             ))}
           </TabsList>
-          <span className="w-full sm:w-auto pb-2 text-right text-[11px] text-ink-muted shrink-0 tabular-nums">{language === 'zh' ? '中文' : 'English'} {readyCount}/{available.length} 已完成</span>
+          <span className="w-full sm:w-auto pb-2 text-right text-xs text-ink-muted shrink-0 tabular-nums">{language === 'zh' ? '中文' : 'English'} {readyCount}/{available.length} 已完成</span>
         </div>
 
         {available.map((p) => (
@@ -137,13 +137,18 @@ export function PlatformTabs({
         ))}
       </Tabs>
       <div className="border-t border-ink-line p-2 flex items-center justify-end gap-2 bg-white shrink-0 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-        {aiReady === false && <Link href="/settings" className="mr-auto text-[11px] text-ink-muted underline underline-offset-2">连接 AI 后自动生成</Link>}
-        <Button size="sm" onClick={onAdaptAll} disabled={Boolean(generating || batchProgress) || !article.content.trim() || aiReady === false}>
+        {aiReady === false && <Link href="/settings" className="mr-auto text-xs text-ink-muted underline underline-offset-2">连接 AI 后自动生成</Link>}
+        <Button
+          size="sm"
+          variant={remainingCount === 0 ? 'ghost' : 'primary'}
+          onClick={onAdaptAll}
+          disabled={Boolean(generating || batchProgress) || !article.content.trim() || aiReady === false}
+        >
           {batchProgress ? <Loader2 size={13} className="animate-spin"/> : <Sparkles size={13}/>}
           {batchProgress
             ? `生成中 ${batchProgress.done}/${batchProgress.total}`
             : remainingCount === 0
-              ? '重新生成全部'
+              ? '全部重新生成'
               : readyCount > 0
                 ? `生成其余 ${remainingCount} 个平台`
                 : '生成全部'}
@@ -193,7 +198,7 @@ function PlatformBody({
 }) {
   const spec = PLATFORMS[platform];
   const [copiedImage, setCopiedImage] = React.useState<number | null>(null);
-  const [viewMode, setViewMode] = React.useState<'preview' | 'edit'>('preview');
+  const [editing, setEditing] = React.useState(false);
   if (!draft) {
     return (
       <div className="h-full min-h-[280px] flex flex-col items-center justify-center text-center px-5">
@@ -210,7 +215,7 @@ function PlatformBody({
           </Button>
         )}
         {spec.officialUrl && (
-          <a href={spec.officialUrl} target="_blank" rel="noreferrer" className="mt-3 text-[11px] text-ink-muted hover:text-ink inline-flex items-center gap-1">
+          <a href={spec.officialUrl} target="_blank" rel="noreferrer" className="mt-3 text-xs text-ink-muted hover:text-ink inline-flex items-center gap-1">
             官方发布入口 <ExternalLink size={11}/>
           </a>
         )}
@@ -230,51 +235,28 @@ function PlatformBody({
     <div className="h-full min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-3 pt-2 pr-1">
       <div className="text-xs text-ink-muted flex items-center gap-2 flex-wrap">
         <span><span className="font-medium text-ink-soft">{spec.label}</span> · {spec.shape}{spec.maxChars ? ` · 建议 ≤${spec.maxChars} 字` : ''}</span>
-        {spec.officialUrl && (
-          <a href={spec.officialUrl} target="_blank" rel="noreferrer" className="ml-auto hover:text-ink inline-flex items-center gap-1 shrink-0">
-            发布入口 <ExternalLink size={11}/>
-          </a>
-        )}
+        <span className="ml-auto flex items-center gap-2 shrink-0">
+          {spec.officialUrl && (
+            <a href={spec.officialUrl} target="_blank" rel="noreferrer" className="hover:text-ink inline-flex items-center gap-1">
+              发布入口 <ExternalLink size={11}/>
+            </a>
+          )}
+          {spec.copyMode === 'rich' && (
+            <button
+              type="button"
+              onClick={() => setEditing((value) => !value)}
+              className="rounded px-1.5 py-0.5 text-ink-soft hover:bg-ink-panel hover:text-ink"
+            >
+              {editing ? '完成' : '编辑'}
+            </button>
+          )}
+        </span>
       </div>
       {showLanguageTabs && (
         <LanguageTabs value={language} onChange={onLanguageChange} hasEnglish={parts.hasEnglish} compact/>
       )}
-      <div className="flex items-center gap-2">
-        <div role="tablist" aria-label={`${spec.label}文案视图`} className="inline-flex rounded-md border border-ink-line bg-ink-panel/60 p-0.5"
-          onKeyDown={(event) => {
-            if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft' && event.key !== 'Home' && event.key !== 'End') return;
-            const buttons = Array.from((event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('button[role="tab"]'));
-            if (!buttons.length) return;
-            const last = buttons.length - 1;
-            const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
-            let next = -1;
-            if (event.key === 'Home') next = 0;
-            else if (event.key === 'End') next = last;
-            else if (event.key === 'ArrowRight') next = current === -1 ? 0 : current === last ? 0 : current + 1;
-            else next = current === -1 ? last : current === 0 ? last : current - 1;
-            event.preventDefault();
-            buttons[next].focus();
-          }}>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={viewMode === 'preview'}
-            tabIndex={viewMode === 'preview' ? 0 : -1}
-            onClick={() => setViewMode('preview')}
-            className={`h-10 rounded px-3 text-xs inline-flex items-center gap-1.5 sm:h-7 ${viewMode === 'preview' ? 'bg-white text-ink shadow-sm' : 'text-ink-muted hover:text-ink'}`}
-          ><Eye size={12}/>成稿预览</button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={viewMode === 'edit'}
-            tabIndex={viewMode === 'edit' ? 0 : -1}
-            onClick={() => setViewMode('edit')}
-            className={`h-10 rounded px-3 text-xs inline-flex items-center gap-1.5 sm:h-7 ${viewMode === 'edit' ? 'bg-white text-ink shadow-sm' : 'text-ink-muted hover:text-ink'}`}
-          ><PencilLine size={12}/>编辑文案</button>
-        </div>
-        <span className="ml-auto text-[10px] text-ink-muted">{copyModeLabel(spec.copyMode)}</span>
-      </div>
-      {viewMode === 'edit' ? (
+      {/* 纯文本 / Markdown 平台：文本本身就是成品，直接给可编辑文本框；富文本平台默认看渲染成品，点「编辑」再进文本框。 */}
+      {spec.copyMode !== 'rich' || editing ? (
         <textarea
           aria-label={`${spec.label}${language === 'zh' ? '中文' : 'English'}文案`}
           value={selectedDraft}
@@ -295,7 +277,7 @@ function PlatformBody({
           <div className="mb-2 flex items-center gap-2 text-xs">
             <ImageIcon size={13} className="text-ink-muted"/>
             <span className="font-medium text-ink-soft">发布配图 · {images.length}</span>
-            <span className="ml-auto text-[11px] text-ink-muted">{spec.copyMode === 'rich' ? '复制图文时自动带入' : '发布时单独上传'}</span>
+            <span className="ml-auto text-xs text-ink-muted">{spec.copyMode === 'rich' ? '复制图文时自动带入' : '发布时单独上传'}</span>
           </div>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {images.map((image, index) => (
@@ -303,7 +285,7 @@ function PlatformBody({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={image.src} alt={image.alt} className="h-24 w-full bg-ink-panel object-cover"/>
                 <div className="p-2">
-                  <p className="truncate text-[10px] text-ink-muted" title={image.caption || image.alt}>{image.caption || image.alt}</p>
+                  <p className="truncate text-xs text-ink-muted" title={image.caption || image.alt}>{image.caption || image.alt}</p>
                   <div className="mt-2 flex gap-1">
                     <button
                       type="button"
@@ -314,7 +296,7 @@ function PlatformBody({
                         setCopiedImage(index);
                         setTimeout(() => setCopiedImage(null), 1800);
                       }}
-                      className="inline-flex h-10 min-w-10 flex-1 items-center justify-center gap-1 rounded border border-ink-line text-[11px] text-ink-soft hover:bg-ink-panel sm:h-8 sm:min-w-0"
+                      className="inline-flex h-10 min-w-10 flex-1 items-center justify-center gap-1 rounded border border-ink-line text-xs text-ink-soft hover:bg-ink-panel sm:h-8 sm:min-w-0"
                     >
                       {copiedImage === index ? <Check size={11}/> : <Copy size={11}/>}
                       {copiedImage === index ? '已复制' : '复制'}
@@ -338,13 +320,13 @@ function PlatformBody({
         </section>
       )}
       <div className="flex items-center gap-2">
-        <Button onClick={onAdapt} disabled={busy || aiReady === false} size="sm">
-          {generating ? <Loader2 size={13} className="animate-spin mr-1"/> : null}
-          {generating ? '适配中…' : aiReady === false ? '连接 AI 后适配' : selectedDraft ? '重新适配' : language === 'en' ? '生成 English' : '生成中文稿'}
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => onCopy(selectedDraft)} disabled={!selectedDraft}>
+        <Button variant="primary" size="sm" onClick={() => onCopy(selectedDraft)} disabled={!selectedDraft}>
           {copied ? <Check size={13} className="mr-1"/> : <Copy size={13} className="mr-1"/>}
           {copied ? '已复制' : platform === 'wechat' ? '复制排版正文' : spec.copyMode === 'rich' ? '复制图文' : '复制文案'}
+        </Button>
+        <Button variant="ghost" size="sm" onClick={onAdapt} disabled={busy || aiReady === false}>
+          {generating ? <Loader2 size={13} className="animate-spin mr-1"/> : null}
+          {generating ? '适配中…' : aiReady === false ? '连接 AI 后适配' : selectedDraft ? '重新适配' : language === 'en' ? '生成 English' : '生成中文稿'}
         </Button>
         <span
           className={cn(
@@ -357,12 +339,6 @@ function PlatformBody({
       </div>
     </div>
   );
-}
-
-function copyModeLabel(mode: 'rich' | 'markdown' | 'plain') {
-  if (mode === 'rich') return '富文本复制';
-  if (mode === 'markdown') return 'Markdown 复制';
-  return '纯文本复制';
 }
 
 function sanitizePlatformPreview(html: string) {

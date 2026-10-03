@@ -22,7 +22,7 @@ export function AiSetupGuide({ onRefresh, compact = false }: Props) {
   };
 
   return (
-    <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-[13px] text-amber-900">
+    <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
       <div className="font-semibold mb-1.5">先配置 AI 密钥，AI 生成才可用</div>
       {!compact && (
         <ol className="list-decimal pl-4 space-y-1 text-[12.5px] text-amber-900/90">

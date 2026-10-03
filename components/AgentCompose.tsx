@@ -103,7 +103,7 @@ export function AgentCompose({ brief, onChange, onGenerate, onImportMaterial, on
         <div className="text-xl leading-none">{agent?.emoji ?? '✍️'}</div>
         <div className="min-w-0">
           <div className="text-sm font-semibold">{agent?.name ?? '自由写作'}</div>
-          <div className="text-[11px] text-ink-muted mt-0.5 truncate">{agent?.tagline ?? '不绑定特定流程'}</div>
+          <div className="text-xs text-ink-muted mt-0.5 truncate">{agent?.tagline ?? '不绑定特定流程'}</div>
         </div>
       </div>
 
@@ -126,7 +126,7 @@ export function AgentCompose({ brief, onChange, onGenerate, onImportMaterial, on
         </div>
         {!isCopyOnly && (
           <button
-            className="mt-1.5 min-h-10 inline-flex items-center gap-1 text-[11px] text-ink-muted hover:text-ink sm:min-h-0"
+            className="mt-1.5 min-h-10 inline-flex items-center gap-1 text-xs text-ink-muted hover:text-ink sm:min-h-0"
             onClick={() => onImportMaterial(brief.material)}
             disabled={!brief.material.trim()}
           >
@@ -149,7 +149,7 @@ export function AgentCompose({ brief, onChange, onGenerate, onImportMaterial, on
 
       {/* 高级选项 */}
       <details ref={advancedRef} className="group rounded-lg border border-ink-line">
-        <summary className="flex items-center justify-between px-3 py-2 cursor-pointer text-[13px] font-medium text-ink-soft select-none">
+        <summary className="flex items-center justify-between px-3 py-2 cursor-pointer text-sm font-medium text-ink-soft select-none">
           高级选项
           <ChevronDown size={14} className="text-ink-muted transition-transform group-open:rotate-180"/>
         </summary>
@@ -165,7 +165,7 @@ export function AgentCompose({ brief, onChange, onGenerate, onImportMaterial, on
                 默认
               </Chip>
             </div>
-            <p className="text-[11px] text-ink-muted mt-1.5">
+            <p className="text-xs text-ink-muted mt-1.5">
               {brief.platforms.length > 0 ? brief.platforms.map((p) => PLATFORMS[p].label).join(' · ') : '使用默认平台'}
             </p>
           </Field>
@@ -207,7 +207,7 @@ export function AgentCompose({ brief, onChange, onGenerate, onImportMaterial, on
         </div>
       </details>
 
-      <div ref={progressRef} className="sticky bottom-0 z-10 -mx-5 mt-1 border-t border-ink-line/80 bg-white/95 px-5 pb-1 pt-3 backdrop-blur-xl">
+      <div ref={progressRef} className="sticky bottom-0 z-10 -mx-5 mt-1 border-t border-ink-line/80 bg-white px-5 pb-1 pt-3">
         {generating && generationProgress ? (
           <GenerationProgress state={generationProgress} materialType={brief.materialType} platformCount={brief.platforms.length} onCancel={onCancelGeneration}/>
         ) : (
@@ -221,7 +221,7 @@ export function AgentCompose({ brief, onChange, onGenerate, onImportMaterial, on
             {isCopyOnly ? '导入并排版' : '开始生成'}
           </Button>
         )}
-        {!brief.material.trim() && <p className="mt-1.5 text-center text-[11px] text-ink-muted">先放入素材，再生成母稿</p>}
+        {!brief.material.trim() && <p className="mt-1.5 text-center text-xs text-ink-muted">先放入素材，再生成母稿</p>}
         {showGuide && (
           <div className="mt-2">
             <AiSetupGuide onRefresh={refresh}/>
@@ -237,7 +237,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
     <div>
       <label className="block text-xs font-medium text-ink-soft mb-1">{label}</label>
       {children}
-      {hint && <p className="text-[11px] text-ink-muted mt-1">{hint}</p>}
+      {hint && <p className="text-xs text-ink-muted mt-1">{hint}</p>}
     </div>
   );
 }

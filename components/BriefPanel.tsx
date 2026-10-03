@@ -109,7 +109,7 @@ export function BriefPanel({ brief, onChange, onGenerate, onImportMaterial, onEr
           )}
         </div>
         <button
-          className="mt-1.5 min-h-10 inline-flex items-center gap-1 text-[11px] text-ink-muted hover:text-ink sm:min-h-0"
+          className="mt-1.5 min-h-10 inline-flex items-center gap-1 text-xs text-ink-muted hover:text-ink sm:min-h-0"
           onClick={() => onImportMaterial(brief.material)}
           disabled={!brief.material.trim()}
         >
@@ -128,7 +128,7 @@ export function BriefPanel({ brief, onChange, onGenerate, onImportMaterial, onEr
       </Field>
 
       <details ref={advancedRef} className="group rounded-lg border border-ink-line">
-        <summary className="flex items-center justify-between px-3 py-2 cursor-pointer text-[13px] font-medium text-ink-soft select-none">
+        <summary className="flex items-center justify-between px-3 py-2 cursor-pointer text-sm font-medium text-ink-soft select-none">
           高级选项
           <ChevronDown size={14} className="text-ink-muted transition-transform group-open:rotate-180"/>
         </summary>
@@ -174,7 +174,7 @@ export function BriefPanel({ brief, onChange, onGenerate, onImportMaterial, onEr
         </div>
       </details>
 
-      <div ref={progressRef} className="sticky bottom-0 z-10 -mx-5 mt-1 border-t border-ink-line/80 bg-white/95 px-5 pb-1 pt-3 backdrop-blur-xl">
+      <div ref={progressRef} className="sticky bottom-0 z-10 -mx-5 mt-1 border-t border-ink-line/80 bg-white px-5 pb-1 pt-3">
         {generating && generationProgress ? (
           <GenerationProgress state={generationProgress} materialType={brief.materialType} platformCount={brief.platforms.length} onCancel={onCancelGeneration}/>
         ) : (
@@ -203,7 +203,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
     <div>
       <label className="block text-xs font-medium text-ink-soft mb-1">{label}</label>
       {children}
-      {hint && <p className="text-[11px] text-ink-muted mt-1">{hint}</p>}
+      {hint && <p className="text-xs text-ink-muted mt-1">{hint}</p>}
     </div>
   );
 }

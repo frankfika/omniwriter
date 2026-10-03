@@ -142,9 +142,14 @@ export function Editor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [html, editor]);
 
-  // 把编辑器实例暴露给父组件（如联网配图面板在光标处插图）
+  // 把编辑器实例暴露给父组件（如联网配图面板在光标处插图）。
+  // 卸载时清成 null：否则父组件在 Editor 销毁后还持有旧 editor 引用，
+  // 下次 render 用 isDestroyed 判断前有一拍空档，可能误调 view.dispatch(tr)。
   React.useEffect(() => {
     if (editorRef) editorRef.current = editor;
+    return () => {
+      if (editorRef) editorRef.current = null;
+    };
   }, [editor, editorRef]);
 
   if (!editor) return <div className={cn('text-ink-muted text-sm p-8', className)}>加载编辑器…</div>;

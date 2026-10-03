@@ -17,7 +17,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const articles = useArticleStore((s) => s.articles);
   const remove = useArticleStore((s) => s.remove);
   const flush = useArticleStore((s) => s.flush);
-  const visibleArticles = articles.slice(0, 8);
   const [pendingDelete, setPendingDelete] = React.useState<string | null>(null);
   const pendingDeleteRef = React.useRef<string | null>(null);
   pendingDeleteRef.current = pendingDelete;
@@ -76,28 +75,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
       <div className="min-h-0 flex-1 grid grid-rows-1 grid-cols-1 xl:grid-cols-[260px_1fr] overflow-hidden">
-      <aside className="hidden xl:flex border-r border-white/80 bg-white/70 backdrop-blur-xl flex-col shadow-[8px_0_30px_rgba(15,23,42,0.04)]">
+      <aside className="hidden xl:flex flex-col border-r border-ink-line bg-white">
         <div className="px-4 h-14 flex items-center border-b border-ink-line/70">
-          <span className="mr-2 size-6 rounded-lg bg-gradient-to-br from-slate-900 to-indigo-600 shadow-sm"/>
+          <span className="mr-2 size-6 rounded-lg bg-ink"/>
           <Link href="/" className="font-semibold tracking-tightish">OmniWriter</Link>
-          <span className="ml-2 text-[10px] text-indigo-600">AI STUDIO</span>
         </div>
         <div className="p-2 space-y-1">
           <Link
             href="/"
             className={cn(
-              'flex items-center gap-2 rounded-md px-2.5 py-2 text-sm font-medium hover:bg-white',
-              pathname === '/' && 'bg-white text-indigo-950 shadow-[inset_2px_0_0_#6366f1,0_2px_10px_rgba(15,23,42,0.05)]',
+              'flex items-center gap-2 rounded-md px-2.5 py-2 text-sm font-medium hover:bg-ink-panel',
+              pathname === '/' && 'bg-ink-panel font-medium',
             )}
           >
-            <PenLine size={14} className="text-indigo-600"/>
+            <PenLine size={14} className="text-ink-muted"/>
             创作台
           </Link>
           <Link
             href="/marketplace"
             className={cn(
-              'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm hover:bg-white',
-              pathname === '/marketplace' && 'bg-white',
+              'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm hover:bg-ink-panel',
+              pathname === '/marketplace' && 'bg-ink-panel font-medium',
             )}
           >
             <Blocks size={13} className="text-ink-muted"/>
@@ -109,15 +107,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="px-3 py-6 text-xs text-ink-muted">还没有文章。选一个 Agent 开始。</div>
           )}
           <ul className="flex flex-col gap-0.5">
-            {visibleArticles.map((a) => {
+            {articles.map((a) => {
               const active = pathname === `/article/${a.id}`;
               return (
                 <li key={a.id} className="group relative">
                   <Link
                     href={`/article/${a.id}`}
                     className={cn(
-                      'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm hover:bg-white',
-                      active && 'bg-white text-indigo-950 shadow-[inset_2px_0_0_#6366f1,0_2px_10px_rgba(15,23,42,0.05)]',
+                      'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm hover:bg-ink-panel',
+                      active && 'bg-ink-panel font-medium',
                     )}
                   >
                     <FileText size={13} className="text-ink-muted shrink-0"/>
@@ -133,29 +131,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     className={cn(
                       'absolute right-1 top-1/2 -translate-y-1/2 inline-flex min-h-10 min-w-10 items-center justify-center gap-1 rounded text-ink-muted hover:text-red-600 hover:bg-red-50 sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0',
                       pendingDelete === a.id && 'bg-red-50 text-red-600 ring-1 ring-red-200',
-                      pendingDelete !== a.id && 'lg:opacity-0 lg:group-hover:opacity-100',
+                      pendingDelete !== a.id && 'lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100',
                     )}
                     title={pendingDelete === a.id ? '再次点击以确认删除（3 秒内有效）' : '删除'}
                   >
                     <Trash2 size={13}/>
-                    {pendingDelete === a.id && <span className="ml-0.5 text-[10px] font-medium">确认</span>}
+                    {pendingDelete === a.id && <span className="ml-0.5 text-xs font-medium">确认</span>}
                   </button>
                 </li>
               );
             })}
           </ul>
-          {articles.length > visibleArticles.length && (
-            <Link href="/" className="block px-3 py-2 text-[11px] text-ink-muted hover:text-ink">
-              还有 {articles.length - visibleArticles.length} 篇，在首页查看
-            </Link>
-          )}
         </nav>
         <div className="p-2 border-t border-ink-line">
           <Link
             href="/settings"
             className={cn(
-              'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm hover:bg-white',
-              pathname === '/settings' && 'bg-white',
+              'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm hover:bg-ink-panel',
+              pathname === '/settings' && 'bg-ink-panel font-medium',
             )}
           >
             <Settings size={13} className="text-ink-muted"/>
@@ -166,16 +159,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex flex-col min-w-0">
         {/* 移动端顶栏 */}
-        <div className="xl:hidden flex items-center justify-between gap-3 px-4 h-12 border-b border-white/80 bg-white/80 backdrop-blur-xl shrink-0">
-          <Link href="/" className="inline-flex h-11 shrink-0 items-center gap-2 px-2 font-semibold tracking-tightish sm:h-8"><span className="size-5 rounded-md bg-gradient-to-br from-slate-900 to-indigo-600"/>OmniWriter</Link>
+        <div className="xl:hidden flex items-center justify-between gap-3 px-4 h-12 border-b border-ink-line bg-white shrink-0">
+          <Link href="/" className="inline-flex h-11 shrink-0 items-center gap-2 px-2 font-semibold tracking-tightish sm:h-8"><span className="size-5 rounded-md bg-ink"/>OmniWriter</Link>
           <div className="flex items-center gap-1 sm:gap-3 text-sm">
-            <Link href="/" aria-label="创作台" title="创作台" className={cn('h-11 w-11 p-0 sm:h-8 sm:w-auto sm:px-2 inline-flex items-center justify-center gap-1 rounded-md hover:bg-white hover:text-ink', pathname === '/' ? 'bg-white text-indigo-700' : 'text-ink-muted')}>
+            <Link href="/" aria-label="创作台" title="创作台" className={cn('h-11 w-11 p-0 sm:h-8 sm:w-auto sm:px-2 inline-flex items-center justify-center gap-1 rounded-md hover:bg-ink-panel hover:text-ink', pathname === '/' ? 'bg-ink-panel text-ink font-medium' : 'text-ink-muted')}>
               <PenLine size={14}/><span className="hidden sm:inline">创作</span>
             </Link>
-            <Link href="/marketplace" aria-label="能力市场" title="能力市场" className="h-11 w-11 p-0 sm:h-8 sm:w-auto sm:px-2 inline-flex items-center justify-center gap-1 rounded-md hover:bg-white hover:text-ink text-ink-muted">
+            <Link href="/marketplace" aria-label="能力市场" title="能力市场" className={cn('h-11 w-11 p-0 sm:h-8 sm:w-auto sm:px-2 inline-flex items-center justify-center gap-1 rounded-md hover:bg-ink-panel hover:text-ink', pathname === '/marketplace' ? 'bg-ink-panel text-ink font-medium' : 'text-ink-muted')}>
               <Blocks size={14}/><span className="hidden sm:inline">市场</span>
             </Link>
-            <Link href="/settings" aria-label="设置" title="设置" className="h-11 w-11 p-0 sm:h-8 sm:w-auto sm:px-2 inline-flex items-center justify-center gap-1 rounded-md hover:bg-white hover:text-ink text-ink-muted">
+            <Link href="/settings" aria-label="设置" title="设置" className={cn('h-11 w-11 p-0 sm:h-8 sm:w-auto sm:px-2 inline-flex items-center justify-center gap-1 rounded-md hover:bg-ink-panel hover:text-ink', pathname === '/settings' ? 'bg-ink-panel text-ink font-medium' : 'text-ink-muted')}>
               <Settings size={14}/><span className="hidden sm:inline">设置</span>
             </Link>
           </div>

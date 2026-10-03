@@ -72,7 +72,7 @@ export function AgentConfigDialog({ agent, onClose }: AgentConfigDialogProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label={`配置 ${agent.name}`}>
       <button type="button" aria-label="关闭" className="absolute inset-0 cursor-default" onClick={() => onClose(false)}/>
-      <div className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl">
+      <div className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-sm sm:rounded-2xl">
         <div className="flex items-center justify-between border-b border-ink-line px-5 py-3.5">
           <h2 className="text-sm font-semibold">配置「{agent.name}」</h2>
           <button type="button" aria-label="关闭" onClick={() => onClose(false)} className="rounded-lg p-1.5 text-ink-muted hover:bg-ink-panel"><X size={16}/></button>
@@ -121,7 +121,7 @@ export function AgentConfigDialog({ agent, onClose }: AgentConfigDialogProps) {
             </div>
           </Field>
           <label className="flex items-center gap-2 text-sm text-ink">
-            <input type="checkbox" checked={bilingual} onChange={(e) => setBilingual(e.target.checked)} className="size-4 accent-slate-900"/>
+            <input type="checkbox" checked={bilingual} onChange={(e) => setBilingual(e.target.checked)} className="size-4 accent-ink"/>
             默认生成中英双语稿
           </label>
         </div>
@@ -142,7 +142,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
     <div>
       <label className="mb-1 block text-xs font-medium text-ink-soft">{label}</label>
       {children}
-      {hint && <p className="mt-1 text-[11px] text-ink-muted">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-ink-muted">{hint}</p>}
     </div>
   );
 }

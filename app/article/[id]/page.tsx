@@ -24,10 +24,10 @@ import { downloadBlob, htmlToMarkdown, markdownToInlineHtml } from '@/src/lib/ex
 import { cn } from '@/components/ui/cn';
 import { ErrorBanner, useError } from '@/components/ErrorBanner';
 import { useAiStatus } from '@/src/lib/use-ai-status';
-import type { GenerationStreamEvent, GenerationViewState } from '@/src/lib/generation-events';
+import type { CrossValidationVerdict, GenerationStreamEvent, GenerationViewState } from '@/src/lib/generation-events';
 import { extractContentTitle, joinBilingualContent, replaceContentTitle, splitBilingualContent, type ContentLanguage } from '@/src/lib/bilingual';
 import { LanguageTabs } from '@/components/LanguageTabs';
-import { Check, CircleAlert, FileText, Loader2, PencilLine, Save, Send } from 'lucide-react';
+import { Check, CircleAlert, FileText, Loader2, PencilLine, Save, Send, ShieldCheck } from 'lucide-react';
 import { resolveAgent } from '@/src/lib/agents';
 import { WECHAT_TEMPLATES } from '@/src/lib/templates';
 import { inferPlatformsFromInstruction } from '@/src/lib/creator-intent';
@@ -60,6 +60,9 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
 
   const [generating, setGenerating] = React.useState(false);
   const [generationProgress, setGenerationProgress] = React.useState<GenerationViewState | null>(null);
+  // 交叉验证摘要：verify 事件只比 done 早一点，而 generationProgress 在进入编辑器
+  // 约 0.5s 后就被清空，验证结果会只闪现一下——挪到独立 state，在编辑器标题行常驻。
+  const [verdict, setVerdict] = React.useState<CrossValidationVerdict | null>(null);
   const generationController = React.useRef<AbortController | null>(null);
   const autoGenerateStarted = React.useRef(false);
   const platformBatchController = React.useRef<AbortController | null>(null);
@@ -77,6 +80,18 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
   // 当前激活语言的 TipTap 实例（配图面板在光标处插图用）；导出 ZIP 的防连点标记
   const editorInstanceRef = React.useRef<TiptapEditor | null>(null);
   const exportingRef = React.useRef(false);
+  // AI 核查摘要浮层：原生 <details> 不会在点击外部时收起，浮层会一直盖在正文上，
+  // 这里补一个 pointerdown 外点关闭。
+  const verdictDetailsRef = React.useRef<HTMLDetailsElement>(null);
+  React.useEffect(() => {
+    const details = verdictDetailsRef.current;
+    if (!verdict || !details) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (details.open && !details.contains(event.target as Node)) details.open = false;
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [verdict]);
 
   React.useEffect(() => {
     setMobileTab(initialWorkspaceStep(searchParams));
@@ -357,6 +372,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
     const localRequestId = crypto.randomUUID();
     const startedAt = Date.now();
     setGenerating(true);
+    setVerdict(null);
     setGenerationProgress({
       requestId: localRequestId,
       startedAt,
@@ -429,6 +445,8 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
             ...previous,
             verdict: event.verdict,
           } : previous);
+          // 同步落到独立 state：生成卡片在进入编辑器后会被清空，摘要在编辑器标题行常驻。
+          setVerdict(event.verdict);
         } else if (event.type === 'done') {
           completed = true;
           generatedMaster = event.md;
@@ -772,6 +790,8 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
         if (refineController.current === refineAbort) refineController.current = null;
       }
       setContent(article.id, markdownToInlineHtml(payload.md));
+      // 对话改稿已改变正文，生成时那次的核查结论不再代表当前稿，清掉避免误导。
+      setVerdict(null);
       if (payload.title) onTitle(payload.title);
       setLanguage('zh');
       selectWorkspaceStep('editor');
@@ -837,7 +857,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
 
   const editorPanel = (
     <>
-      <div className="px-5 sm:px-6 pt-4 pb-3 border-b border-ink-line/80 bg-white/85 backdrop-blur-xl">
+      <div className="px-5 sm:px-6 pt-4 pb-3 border-b border-ink-line bg-white">
         <div className="flex items-center gap-3">
           <input
             value={selectedTitle}
@@ -857,17 +877,52 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
             <button
               type="button"
               onClick={onCancelPlatformBatch}
-              className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1.5 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100"
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-ink-panel px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-ink-line/60"
               title="停止生成其余平台稿"
             >
               <Loader2 size={12} className="animate-spin"/> 平台稿 {batchProgress.done}/{batchProgress.total} · 停止
             </button>
           )}
+          {verdict && (
+            <details key={article.id} ref={verdictDetailsRef} className="relative shrink-0">
+              <summary
+                className={cn(
+                  'inline-flex cursor-pointer list-none items-center gap-1.5 rounded-md text-xs [&::-webkit-details-marker]:hidden',
+                  verdict.passed ? 'text-ink-muted' : 'text-amber-700',
+                )}
+              >
+                <ShieldCheck size={12}/>
+                <span className="hidden sm:inline">{verdict.passed ? '已通过 AI 核查' : `AI 核查：${verdict.issues.length} 条建议`}</span>
+              </summary>
+              <div className="absolute left-0 top-full z-20 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-ink-line bg-white p-3 text-xs leading-relaxed shadow-sm sm:left-auto sm:right-0">
+                <p className="text-ink-muted">交叉验证 · {verdict.model} · {verdict.score}/100 · {verdict.passed ? '通过' : '需要修改'}</p>
+                {verdict.issues.length > 0 && (
+                  <div className="mt-2">
+                    <p className="font-medium text-ink">问题</p>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-4 text-ink-soft">
+                      {verdict.issues.map((issue, index) => (<li key={index}>{issue}</li>))}
+                    </ul>
+                  </div>
+                )}
+                {verdict.suggestions.length > 0 && (
+                  <div className="mt-2">
+                    <p className="font-medium text-ink">建议</p>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-4 text-ink-soft">
+                      {verdict.suggestions.map((suggestion, index) => (<li key={index}>{suggestion}</li>))}
+                    </ul>
+                  </div>
+                )}
+                {verdict.issues.length === 0 && verdict.suggestions.length === 0 && (
+                  <p className="mt-2 text-ink-soft">没有具体问题或建议。</p>
+                )}
+              </div>
+            </details>
+          )}
           {!batchProgress && article.content.trim() && (
             <button
               type="button"
               onClick={() => { setPublishView('preview'); selectWorkspaceStep('publish'); }}
-              className="min-h-10 shrink-0 inline-flex items-center gap-1.5 rounded-full bg-ink-panel px-3 text-[11px] font-medium text-ink-soft hover:bg-slate-200 sm:min-h-0 sm:px-2.5 sm:py-1.5"
+              className="min-h-10 shrink-0 inline-flex items-center gap-1.5 rounded-full bg-ink-panel px-3 text-xs font-medium text-ink-soft hover:bg-ink-line/60 sm:min-h-0 sm:px-2.5 sm:py-1.5"
               title="查看自动排版后的公众号成品"
             >
               <Check size={12}/><span className="hidden sm:inline">排版预览</span><span className="sm:hidden">预览</span>
@@ -875,7 +930,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
           )}
           <div
             className={cn(
-              'inline-flex shrink-0 items-center gap-1 text-[11px]',
+              'inline-flex shrink-0 items-center gap-1 text-xs',
               saveState === 'error' ? 'text-red-600' : 'text-ink-muted',
             )}
             role="status"
@@ -889,7 +944,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
         {showLanguageTabs && (
           <div className="mt-3 flex items-center justify-between gap-3">
             <LanguageTabs value={language} onChange={setLanguage} hasEnglish={contentParts.hasEnglish}/>
-            <span className="hidden sm:inline text-[11px] text-ink-muted">两种语言独立编辑，保存为同一篇稿件</span>
+            <span className="hidden sm:inline text-xs text-ink-muted">两种语言独立编辑，保存为同一篇稿件</span>
           </div>
         )}
       </div>
@@ -995,14 +1050,14 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
     <AppShell>
       <div className="h-full flex flex-col app-workspace-bg">
         {error && <ErrorBanner message={error} onDismiss={dismissError}/>}
-        <div className="h-14 flex items-center border-b border-white/80 bg-white/80 px-3 shrink-0 shadow-[0_1px_0_rgba(15,23,42,0.06)] backdrop-blur-xl sm:px-5">
+        <div className="h-14 flex items-center border-b border-ink-line bg-white px-3 shrink-0 sm:px-5">
           <div className="mx-auto flex w-full max-w-5xl items-center gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="truncate text-sm font-semibold text-ink">{article.title || '未命名内容'}</span>
-                {generating || batchProgress || commandBusy ? <Loader2 size={12} className="shrink-0 animate-spin text-indigo-600"/> : <Check size={12} className="shrink-0 text-emerald-600"/>}
+                {generating || batchProgress || commandBusy ? <Loader2 size={12} className="shrink-0 animate-spin text-ink-muted"/> : <Check size={12} className="shrink-0 text-emerald-600"/>}
               </div>
-              <p className="hidden truncate text-[10px] text-ink-muted sm:block">{generating ? 'AI 正在生成母稿' : batchProgress ? `正在同步平台稿 ${batchProgress.done}/${batchProgress.total}` : commandBusy ? 'AI 正在执行本轮修改' : '继续在下方对话，不必重新走流程'}</p>
+              <p className="hidden truncate text-xs text-ink-muted sm:block">{generating ? 'AI 正在生成母稿' : batchProgress ? `正在同步平台稿 ${batchProgress.done}/${batchProgress.total}` : commandBusy ? 'AI 正在执行本轮修改' : '继续在下方对话，不必重新走流程'}</p>
             </div>
             <div className="flex rounded-lg bg-ink-panel p-0.5" role="tablist" aria-label="创作成果"
               onKeyDown={(event) => onTabsKeyDown(event, workspaceViews.map((view) => ({ key: view.key, enabled: view.enabled && !generating })), (key) => selectWorkspaceStep(key as WorkspaceStep))}>
@@ -1031,7 +1086,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
           </div>
         </div>
         {batchProgress && !generating && mobileTab !== 'publish' && (
-          <div className="h-9 shrink-0 border-b border-indigo-100 bg-indigo-50/80 px-4 flex items-center justify-center gap-3 text-xs text-indigo-900" role="status">
+          <div className="h-9 shrink-0 border-b border-ink-line bg-white px-4 flex items-center justify-center gap-3 text-xs text-ink-soft" role="status">
             <span>平台稿正在后台生成 {batchProgress.done}/{batchProgress.total}</span>
             <button type="button" onClick={onCancelPlatformBatch} className="font-medium underline underline-offset-2">停止</button>
           </div>
@@ -1040,23 +1095,23 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
         <div className="flex-1 min-h-0 overflow-hidden">
           {generating && generationProgress && (
             <div className="flex h-full items-center justify-center p-5">
-              <div className="w-full max-w-xl">
+              <div className="w-full max-w-2xl">
                 <GenerationProgress state={generationProgress} materialType={article.brief.materialType} platformCount={article.brief.platforms.length} onCancel={onCancelGeneration}/>
               </div>
             </div>
           )}
           {mobileTab === 'brief' && !generating && (
-            <div className="h-full max-w-2xl mx-auto bg-white/90 border-x border-white shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
+            <div className="h-full max-w-2xl mx-auto bg-white border-x border-ink-line">
               {briefPanel}
             </div>
           )}
           {mobileTab === 'editor' && !generating && (
-            <div className="h-full max-w-4xl mx-auto bg-white/95 border-x border-white shadow-[0_18px_60px_rgba(15,23,42,0.08)] flex flex-col">
+            <div className="h-full max-w-4xl mx-auto bg-white border-x border-ink-line flex flex-col">
               {editorPanel}
             </div>
           )}
           {mobileTab === 'publish' && !generating && (
-            <div className="h-full max-w-5xl mx-auto bg-white/95 border-x border-white shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
+            <div className="h-full max-w-5xl mx-auto bg-white border-x border-ink-line">
               {publishPanel}
             </div>
           )}

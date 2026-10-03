@@ -10,7 +10,7 @@ export function ErrorBanner({ message, onDismiss }: { message: string; onDismiss
   return (
     <div
       role="alert"
-      className="flex items-center justify-between gap-2 px-4 py-2 text-[13px] bg-red-50 text-red-700 border-b border-red-200"
+      className="flex items-center justify-between gap-2 px-4 py-2 text-sm bg-red-50 text-red-700 border-b border-red-200"
     >
       <button
         type="button"

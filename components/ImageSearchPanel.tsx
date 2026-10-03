@@ -176,7 +176,7 @@ export function ImageSearchPanel({
       <header className="flex shrink-0 items-center gap-3 border-b border-ink-line px-4 py-3">
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold tracking-tight text-ink">联网配图</h2>
-          <p className="mt-0.5 truncate text-[11px] text-ink-muted">优先展示原文图片，并保留来源与许可</p>
+          <p className="mt-0.5 truncate text-xs text-ink-muted">优先展示原文图片，并保留来源与许可</p>
         </div>
         <button
           type="button"
@@ -228,9 +228,9 @@ export function ImageSearchPanel({
               const isInserting = insertingId === candidate.id;
 
               return (
-                <article key={`${candidate.id}-${candidate.imageUrl}`} className="overflow-hidden rounded-xl border border-ink-line bg-white shadow-sm transition hover:border-indigo-200 hover:shadow-md">
+                <article key={`${candidate.id}-${candidate.imageUrl}`} className="overflow-hidden rounded-xl border border-ink-line bg-white shadow-sm transition hover:border-ink hover:shadow-md">
                   <div className="relative aspect-[16/10] overflow-hidden bg-ink-panel">
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-[11px] text-ink-muted" aria-hidden="true">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-xs text-ink-muted" aria-hidden="true">
                       <ImageIcon size={18}/>
                       <span>缩略图暂不可用</span>
                     </div>
@@ -244,7 +244,7 @@ export function ImageSearchPanel({
                       onError={(event) => { event.currentTarget.style.display = 'none'; }}
                     />
                     {isOriginal && (
-                      <span className="absolute left-2 top-2 rounded-full border border-white/70 bg-white/90 px-2 py-0.5 text-[10px] font-medium text-indigo-700 shadow-sm backdrop-blur">
+                      <span className="absolute left-2 top-2 rounded-full border border-ink-line bg-white px-2 py-0.5 text-xs font-medium text-ink shadow-sm">
                         原文
                       </span>
                     )}
@@ -254,7 +254,7 @@ export function ImageSearchPanel({
                     <h3 className="line-clamp-2 text-xs font-medium leading-5 text-ink">
                       {candidate.title || '未命名图片'}
                     </h3>
-                    <div className="space-y-1 text-[11px] leading-4 text-ink-muted">
+                    <div className="space-y-1 text-xs leading-4 text-ink-muted">
                       <div className="flex min-w-0 items-center gap-1">
                         <span className="shrink-0">来源</span>
                         {sourceHref ? (
@@ -262,7 +262,7 @@ export function ImageSearchPanel({
                             href={sourceHref}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex min-w-0 items-center gap-1 text-ink-soft hover:text-indigo-700"
+                            className="inline-flex min-w-0 items-center gap-1 text-ink-soft hover:text-ink"
                             title={candidate.sourceLabel}
                           >
                             <span className="truncate">{candidate.sourceLabel || sourceHost(sourceHref)}</span>

@@ -34,7 +34,7 @@ export function LanguageTabs({
 
   return (
     <div
-      className="inline-flex shrink-0 items-center rounded-xl border border-[#e4e7f1] bg-[#f3f5fb] p-1"
+      className="inline-flex shrink-0 items-center rounded-xl border border-ink-line bg-ink-panel p-1"
       role="tablist"
       aria-label="稿件语言"
       onKeyDown={onKeyDown}
@@ -72,9 +72,9 @@ function LanguageTab({
       onClick={onClick}
       className={cn(
         'inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200',
-        compact ? 'h-10 px-3 text-sm sm:h-7 sm:px-2.5 sm:text-[11px]' : 'h-10 px-3.5 text-sm sm:h-8 sm:text-xs',
+        compact ? 'h-10 px-3 text-sm sm:h-7 sm:px-2.5 sm:text-xs' : 'h-10 px-3.5 text-sm sm:h-8 sm:text-xs',
         active
-          ? 'bg-white text-[#3730a3] shadow-[0_1px_2px_rgba(15,23,42,0.08),0_0_0_1px_rgba(99,102,241,0.08)]'
+          ? 'bg-white text-ink'
           : 'text-ink-muted hover:text-ink',
       )}
     >
