@@ -55,9 +55,10 @@ export function Editor({
   editorRef?: React.MutableRefObject<TiptapEditor | null>;
   placeholder?: string;
   className?: string;
-  // WP-A: 流式期间编辑器只读、不触发 onUpdate、不写 store。父组件用
-  // `key={streaming ? 'streaming' : article.updatedAt}` 在 done 时强制重挂，
-  // 清空流式过程中堆积的撤销栈条目。
+  // WP-A v0.3.0：流式期间只读、不触发 onUpdate、不写 store。撤销栈清理靠
+  // page.tsx 两个互斥 JSX 分支实现（流式 `<Editor key="streaming" ...>` 与非流式
+  // `<Editor key={article.id} ...>` 不可同时挂载），分支切换触发卸载再挂载，
+  // 撤销栈随之清空。本组件不感知 key。
   streaming?: boolean;
 }) {
   // 初始化阶段 Tiptap 会触发一次「空文档」onUpdate；用 ref 跳过首次回调，

@@ -131,7 +131,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     className={cn(
                       'absolute right-1 top-1/2 -translate-y-1/2 inline-flex min-h-10 min-w-10 items-center justify-center gap-1 rounded text-ink-muted hover:text-red-600 hover:bg-red-50 sm:h-8 sm:w-8 sm:min-h-0 sm:min-w-0',
                       pendingDelete === a.id && 'bg-red-50 text-red-600 ring-1 ring-red-200',
-                      pendingDelete !== a.id && 'lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100',
+                      // 触屏设备（iPad Pro 横屏等 ≥1280 宽的触屏）没有 hover，
+                      // 必须常驻显示；桌面端鼠标用户仍走 hover 才显隐。
+                      pendingDelete !== a.id && '[@media(hover:hover)]:lg:opacity-0 [@media(hover:hover)]:lg:group-hover:opacity-100 [@media(hover:hover)]:lg:group-focus-within:opacity-100',
                     )}
                     title={pendingDelete === a.id ? '再次点击以确认删除（3 秒内有效）' : '删除'}
                   >

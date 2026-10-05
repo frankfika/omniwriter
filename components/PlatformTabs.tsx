@@ -14,6 +14,9 @@ import { LanguageTabs } from './LanguageTabs';
 import { extractContentTitle, joinBilingualContent, splitBilingualContent, type ContentLanguage } from '@/src/lib/bilingual';
 import { copyContentImage, downloadContentImage, extractContentImageRefs, type ContentImageRef } from '@/src/lib/images';
 
+// WP-B v0.4.0：公众号成品预览作为插槽固定排在第一位（不管 brief.platforms
+// 是否含公众号），保证改稿 / 导入素材 / 平台不含公众号时都能看到当前原稿的
+// 模板化预览。tab / onTabChange 由父组件控制，去掉内部 useState。
 export function PlatformTabs({
   article,
   generating,
@@ -27,6 +30,9 @@ export function PlatformTabs({
   language,
   onLanguageChange,
   showLanguageTabs,
+  tab,
+  onTabChange,
+  wechatPreview,
 }: {
   article: Article;
   generating: PlatformId | null;
@@ -40,19 +46,23 @@ export function PlatformTabs({
   language: ContentLanguage;
   onLanguageChange: (language: ContentLanguage) => void;
   showLanguageTabs: boolean;
+  tab: PlatformId;
+  onTabChange: (next: PlatformId) => void;
+  wechatPreview?: React.ReactNode;
 }) {
-  const available = article.brief.platforms as PlatformId[];
-  const [tab, setTab] = React.useState<PlatformId>(available[0] ?? 'wechat');
+  // 公众号成品 tab 始终排第一；其它 tab 取自 brief.platforms（去重）。
+  const available: PlatformId[] = wechatPreview
+    ? ['wechat', ...article.brief.platforms.filter((p): p is PlatformId => p !== 'wechat')]
+    : [...article.brief.platforms];
+  const active = available.includes(tab) ? tab : (available[0] ?? 'wechat');
   const [copied, setCopied] = React.useState<PlatformId | null>(null);
   const images = React.useMemo(() => extractContentImageRefs(article.content), [article.content]);
 
-  // 当可用平台集合变化导致当前 Tab 失效时，回退到第一个平台
-  React.useEffect(() => {
-    if (!available.includes(tab)) setTab(available[0] ?? 'wechat');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [article.brief.platforms.join(',')]);
-
+  // 平台草稿「已完成」统计：公众号成品 tab 不存在独立草稿，看原稿是否非空即可。
   const readyCount = available.filter((platform) => {
+    if (platform === 'wechat' && wechatPreview) {
+      return Boolean(article.content.trim());
+    }
     const parts = splitBilingualContent(article.platformDrafts[platform] ?? '');
     return Boolean((language === 'zh' ? parts.zh : parts.en).trim());
   }).length;
@@ -85,6 +95,8 @@ export function PlatformTabs({
     }
   };
 
+  // 没传 wechatPreview 且用户也没选任何平台：保留旧版空状态兜底（理论上 page.tsx
+  // 总是传 wechatPreview，所以这个分支实际不会走到，但留作防御性编程）。
   if (!available.length) {
     return (
       <div className="h-full min-h-[320px] flex flex-col items-center justify-center bg-white px-6 text-center">
@@ -98,13 +110,19 @@ export function PlatformTabs({
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-white">
-      <Tabs value={tab} onValueChange={(v) => setTab(v as PlatformId)} className="flex-1 min-h-0">
+      <Tabs value={active} onValueChange={(v) => onTabChange(v as PlatformId)} className="flex-1 min-h-0">
         <div className="px-4 pt-2 flex flex-col sm:flex-row sm:items-center gap-x-3 border-b border-ink-line overflow-hidden shrink-0">
           <TabsList className="w-full shrink-0 sm:w-auto sm:min-w-0 sm:flex-1 sm:shrink flex-nowrap overflow-x-auto border-b-0">
             {available.map((p) => (
               <TabsTrigger key={p} value={p}>
                 {PLATFORMS[p].label}
                 {(() => {
+                  // 公众号成品 tab 就绪状态 = 原稿非空；其它 tab 看平台草稿。
+                  if (p === 'wechat' && wechatPreview) {
+                    return article.content.trim()
+                      ? <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500"/>
+                      : null;
+                  }
                   const parts = splitBilingualContent(article.platformDrafts[p] ?? '');
                   const ready = language === 'zh' ? parts.zh : parts.en;
                   return ready.trim() ? <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500"/> : null;
@@ -117,22 +135,30 @@ export function PlatformTabs({
 
         {available.map((p) => (
           <TabsContent key={p} value={p} className="px-4 pb-4 flex-1 min-h-0">
-            <PlatformBody
-              platform={p}
-              draft={article.platformDrafts[p] ?? ''}
-              generating={generating === p}
-              busy={Boolean(generating || batchProgress)}
-              aiReady={aiReady}
-              onAdapt={() => onAdapt(p)}
-              onChange={(t) => onDraftChange(p, t)}
-              onCopy={(text) => onCopy(p, text)}
-              copied={copied === p}
-              language={language}
-              onLanguageChange={onLanguageChange}
-              showLanguageTabs={showLanguageTabs}
-              images={images}
-              onError={onError}
-            />
+            {/* WP-B v0.4.0：公众号成品 tab 走插槽（实时渲染当前原稿的模板化预览），
+                其它 tab 仍走原有的 PlatformBody（基于平台稿）。原本 PlatformBody
+                里的公众号分支已成死分支，但留它无害；五期清理 platformDrafts.wechat
+                时一起拿掉。 */}
+            {p === 'wechat' && wechatPreview ? (
+              wechatPreview
+            ) : (
+              <PlatformBody
+                platform={p}
+                draft={article.platformDrafts[p] ?? ''}
+                generating={generating === p}
+                busy={Boolean(generating || batchProgress)}
+                aiReady={aiReady}
+                onAdapt={() => onAdapt(p)}
+                onChange={(t) => onDraftChange(p, t)}
+                onCopy={(text) => onCopy(p, text)}
+                copied={copied === p}
+                language={language}
+                onLanguageChange={onLanguageChange}
+                showLanguageTabs={showLanguageTabs}
+                images={images}
+                onError={onError}
+              />
+            )}
           </TabsContent>
         ))}
       </Tabs>

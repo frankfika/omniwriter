@@ -89,7 +89,10 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
   const [batchProgress, setBatchProgress] = React.useState<{ done: number; total: number } | null>(null);
   // 所有尺寸都按阶段一次只显示一个主任务，避免素材、编辑、预览、平台稿同时堆叠。
   const [mobileTab, setMobileTab] = React.useState<WorkspaceStep>(() => initialWorkspaceStep(searchParams));
-  const [publishView, setPublishView] = React.useState<'preview' | 'platforms'>('preview');
+  // WP-B v0.4.0：公众号成品作为固定首 tab，发布包视图直接是 PlatformTabs。
+  // 这里保留 publishTab state 仅用于聚焦某个平台 tab（如「生成小红书」后切到小红书），
+  // 不再有二级 tab。
+  const [publishTab, setPublishTab] = React.useState<PlatformId>('wechat');
   const [editorView, setEditorView] = React.useState<'content' | 'images'>('content');
   const [language, setLanguage] = React.useState<ContentLanguage>('zh');
   const [commandBusy, setCommandBusy] = React.useState(false);
@@ -230,7 +233,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
     setContent(article.id, markdownToInlineHtml(material || ''));
     setLanguage('zh');
     if (article.brief.materialType === 'copy') {
-      setPublishView('preview');
+      setPublishTab('wechat');
       selectWorkspaceStep('publish');
     } else {
       selectWorkspaceStep('editor');
@@ -296,7 +299,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
 
     if (revealPublish) {
       selectWorkspaceStep('publish');
-      setPublishView('platforms');
+      setPublishTab(targets[0]);
     }
     // 注意：不预先清空已有平台稿。生成成功后才用 setDraft 覆盖；
     // 若中途失败或取消，旧稿仍保留，避免批量生成失败导致内容丢失。
@@ -853,7 +856,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
 
       if (agentId === 'qa-editor') {
         const issues = validateMarkdown(article.content);
-        setPublishView('preview');
+        setPublishTab('wechat');
         selectWorkspaceStep('publish');
         const high = issues.filter((issue) => issue.severity === 'high').length;
         addConversationMessage(
@@ -872,7 +875,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
         return;
       }
       if (/预览|成品|排版效果/.test(instruction) && !/修改|优化|改成/.test(instruction)) {
-        setPublishView('preview');
+        setPublishTab('wechat');
         selectWorkspaceStep('publish');
         addConversationMessage('assistant', '已打开成品预览。模板、手机宽度和复制都在这里。', agentId);
         return;
@@ -900,7 +903,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
       if (/模板|版式|排版风格/.test(instruction)) {
         const nextTemplate = resolveTemplateFromInstruction(instruction, activeTemplateId);
         update(article.id, { templateId: nextTemplate.id });
-        setPublishView('preview');
+        setPublishTab('wechat');
         selectWorkspaceStep('publish');
         addConversationMessage('assistant', `已切换为「${nextTemplate.name}」模板，并打开成品预览。`, agentId);
         return;
@@ -1041,7 +1044,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
           {!batchProgress && article.content.trim() && (
             <button
               type="button"
-              onClick={() => { setPublishView('preview'); selectWorkspaceStep('publish'); }}
+              onClick={() => { setPublishTab('wechat'); selectWorkspaceStep('publish'); }}
               className="min-h-10 shrink-0 inline-flex items-center gap-1.5 rounded-full bg-ink-panel px-3 text-xs font-medium text-ink-soft hover:bg-ink-line/60 sm:min-h-0 sm:px-2.5 sm:py-1.5"
               title="查看自动排版后的公众号成品"
             >
@@ -1095,38 +1098,28 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
     </>
   );
 
+  // WP-B v0.4.0：去掉二级 tab。发布包视图直接是 PlatformTabs，把公众号成品作为
+  // 插槽（wechatPreview）固定排首位，跟着当前原稿实时更新。这样用户在改稿 /
+  // 导入素材 / 平台不含公众号三种场景下都能看到公众号模板化的成品。
   const publishPanel = (
     <div className="h-full flex flex-col bg-white">
       <ValidationStrip markdown={selectedContent} title={renderedTitle} />
-      <div className="min-h-12 shrink-0 border-b border-ink-line px-4 py-1 flex items-center justify-between bg-white">
-        <div className="text-sm font-semibold">发布准备</div>
-        <div className="rounded-lg bg-ink-panel p-0.5 flex" role="tablist" aria-label="发布内容"
-          onKeyDown={(event) => onTabsKeyDown(event, [
-            { key: 'preview', enabled: true },
-            { key: 'platforms', enabled: true },
-          ], (key) => setPublishView(key as 'preview' | 'platforms'))}>
-          <button
-            role="tab"
-            aria-selected={publishView === 'preview'}
-            tabIndex={publishView === 'preview' ? 0 : -1}
-            onClick={() => setPublishView('preview')}
-            className={cn('h-10 px-3 rounded-md text-sm sm:h-7 sm:text-xs', publishView === 'preview' ? 'bg-white shadow-sm text-ink' : 'text-ink-muted')}
-          >
-            成品预览
-          </button>
-          <button
-            role="tab"
-            aria-selected={publishView === 'platforms'}
-            tabIndex={publishView === 'platforms' ? 0 : -1}
-            onClick={() => setPublishView('platforms')}
-            className={cn('h-10 px-3 rounded-md text-sm sm:h-7 sm:text-xs', publishView === 'platforms' ? 'bg-white shadow-sm text-ink' : 'text-ink-muted')}
-          >
-            平台文案
-          </button>
-        </div>
-      </div>
-      <div className="flex-1 min-h-0">
-        {publishView === 'preview' ? (
+      <PlatformTabs
+        article={article}
+        generating={adapting}
+        batchProgress={batchProgress}
+        aiReady={aiReady}
+        onAdapt={onAdapt}
+        onAdaptAll={onAdaptAll}
+        onDraftChange={(p, t) => setDraft(article.id, p, t)}
+        onExportZip={onExportZip}
+        onError={showError}
+        language={language}
+        onLanguageChange={setLanguage}
+        showLanguageTabs={showLanguageTabs}
+        tab={publishTab}
+        onTabChange={setPublishTab}
+        wechatPreview={
           <PreviewPane
             markdown={selectedContent}
             materialType={article.brief.materialType}
@@ -1139,23 +1132,8 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
             onTemplateChange={(templateId) => update(article.id, { templateId })}
             onError={showError}
           />
-        ) : (
-          <PlatformTabs
-            article={article}
-            generating={adapting}
-            batchProgress={batchProgress}
-            aiReady={aiReady}
-            onAdapt={onAdapt}
-            onAdaptAll={onAdaptAll}
-            onDraftChange={(p, t) => setDraft(article.id, p, t)}
-            onExportZip={onExportZip}
-            onError={showError}
-            language={language}
-            onLanguageChange={setLanguage}
-            showLanguageTabs={showLanguageTabs}
-          />
-        )}
-      </div>
+        }
+      />
     </div>
   );
 
@@ -1213,10 +1191,9 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
         )}
 
         <div className="flex-1 min-h-0 overflow-hidden">
-          {/* WP-A: 生成中把「细条进度 + 编辑器嵌入」叠在同一个视图里——用户在编辑
-              器里盯着逐字出现的正文，标题行 + 工具栏沿用 editorPanel。生成中用
-              单独的 'streaming' key 重挂编辑器，done 时切到 updatedAt 重新挂载，
-              清空流式期间堆积的撤销栈条目。 */}
+          {/* WP-A v0.3.0：生成中渲染独立视图（细条 + 只读 Editor），不走 editorPanel。
+              Editor 用 `key="streaming"`；done 后分支切换到 editorPanel（Editor 换成
+              `key={article.id}` 重挂清撤销栈）。两分支互斥，挂载时只有一个 Editor 实例。 */}
           {generating && generationProgress && (
             <div className="h-full max-w-4xl mx-auto bg-white border-x border-ink-line flex flex-col">
               <GenerationProgress state={generationProgress} onCancel={onCancelGeneration}/>
