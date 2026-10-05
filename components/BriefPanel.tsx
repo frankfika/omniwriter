@@ -11,9 +11,7 @@ import { useAiStatus } from '@/src/lib/use-ai-status';
 import type { Brief, MaterialType, PlatformId, Voice } from '@/src/lib/types';
 import { PLATFORM_ORDER, PLATFORMS } from '@/src/lib/platforms';
 import { resolveWritingStyle, WRITING_STYLES } from '@/src/lib/styles';
-import type { GenerationViewState } from '@/src/lib/generation-events';
 import { composeFetchedMaterial, extractHttpUrls, fetchMaterialSources } from '@/src/lib/material-input';
-import { GenerationProgress } from './GenerationProgress';
 
 interface Props {
   brief: Brief;
@@ -22,8 +20,6 @@ interface Props {
   onImportMaterial: (material: string) => void;
   onError?: (message: string) => void;
   generating: boolean;
-  generationProgress: GenerationViewState | null;
-  onCancelGeneration: () => void;
 }
 
 const MATERIAL_OPTIONS: { value: MaterialType; label: string }[] = [
@@ -34,12 +30,13 @@ const MATERIAL_OPTIONS: { value: MaterialType; label: string }[] = [
   { value: 'copy', label: '已有文案（只排版）' },
 ];
 
-export function BriefPanel({ brief, onChange, onGenerate, onImportMaterial, onError, generating, generationProgress, onCancelGeneration }: Props) {
+// WP-A 删除 generationProgress / onCancelGeneration 死分支 prop：
+//   page.tsx 在 generating 时不再渲染本组件，进度条永远不可见。
+export function BriefPanel({ brief, onChange, onGenerate, onImportMaterial, onError, generating }: Props) {
   const { aiReady, refresh } = useAiStatus();
   const [showGuide, setShowGuide] = React.useState(false);
   const [fetching, setFetching] = React.useState(false);
   const advancedRef = React.useRef<HTMLDetailsElement>(null);
-  const progressRef = React.useRef<HTMLDivElement>(null);
 
   const update = (patch: Partial<Brief>) => onChange({ ...brief, ...patch });
   const selectedStyle = resolveWritingStyle(brief.voice);
@@ -73,12 +70,6 @@ export function BriefPanel({ brief, onChange, onGenerate, onImportMaterial, onEr
     if (advancedRef.current) advancedRef.current.open = false;
     void onGenerate();
   };
-
-  React.useEffect(() => {
-    if (!generating) return;
-    const frame = window.requestAnimationFrame(() => progressRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
-    return () => window.cancelAnimationFrame(frame);
-  }, [generating]);
 
   return (
     <div className="flex flex-col h-full overflow-y-auto p-5 gap-4 bg-white">
@@ -174,20 +165,16 @@ export function BriefPanel({ brief, onChange, onGenerate, onImportMaterial, onEr
         </div>
       </details>
 
-      <div ref={progressRef} className="sticky bottom-0 z-10 -mx-5 mt-1 border-t border-ink-line/80 bg-white px-5 pb-1 pt-3">
-        {generating && generationProgress ? (
-          <GenerationProgress state={generationProgress} materialType={brief.materialType} platformCount={brief.platforms.length} onCancel={onCancelGeneration}/>
-        ) : (
-          <Button
-            onClick={brief.materialType === 'copy' ? () => onImportMaterial(brief.material) : handleGenerate}
-            disabled={!brief.material.trim()}
-            size="lg"
-            className="w-full"
-          >
-            {brief.materialType === 'copy' ? <FileInput size={16} className="mr-1.5"/> : <Sparkles size={16} className="mr-1.5"/>}
-            {brief.materialType === 'copy' ? '导入并排版' : '开始生成'}
-          </Button>
-        )}
+      <div className="sticky bottom-0 z-10 -mx-5 mt-1 border-t border-ink-line/80 bg-white px-5 pb-1 pt-3">
+        <Button
+          onClick={brief.materialType === 'copy' ? () => onImportMaterial(brief.material) : handleGenerate}
+          disabled={!brief.material.trim() || generating}
+          size="lg"
+          className="w-full"
+        >
+          {brief.materialType === 'copy' ? <FileInput size={16} className="mr-1.5"/> : <Sparkles size={16} className="mr-1.5"/>}
+          {brief.materialType === 'copy' ? '导入并排版' : (generating ? '生成中…' : '开始生成')}
+        </Button>
         {showGuide && (
           <div className="mt-2">
             <AiSetupGuide onRefresh={refresh}/>

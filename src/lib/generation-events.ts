@@ -19,10 +19,14 @@ export type GenerationStreamEvent =
       at: number;
     }
   | {
+      // WP-A: 服务端每 ~100ms 发一次；`text` 是自上次发送以来的增量（不是尾部预览）。
+      // 兜底重试时 snapshot 可能变短 → 服务端会发 `reset: true`，客户端清空重建，
+      // 避免新片段被前一个截图的尾部错位叠加。客户端只在 reset 时清 streamText。
       type: 'delta';
       requestId: string;
       chars: number;
-      preview: string;
+      text: string;
+      reset?: boolean;
       at: number;
     }
   | {
@@ -65,8 +69,5 @@ export interface GenerationViewState {
   label: string;
   detail?: string;
   chars: number;
-  preview?: string;
   completed: GenerationStage[];
-  verdict?: CrossValidationVerdict;
 }
-

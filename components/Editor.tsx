@@ -47,6 +47,7 @@ export function Editor({
   editorRef,
   placeholder = '从这里开始写——或者在左侧创作指令面板里点「生成」。',
   className,
+  streaming,
 }: {
   html: string;
   onChange: (html: string) => void;
@@ -54,6 +55,10 @@ export function Editor({
   editorRef?: React.MutableRefObject<TiptapEditor | null>;
   placeholder?: string;
   className?: string;
+  // WP-A: 流式期间编辑器只读、不触发 onUpdate、不写 store。父组件用
+  // `key={streaming ? 'streaming' : article.updatedAt}` 在 done 时强制重挂，
+  // 清空流式过程中堆积的撤销栈条目。
+  streaming?: boolean;
 }) {
   // 初始化阶段 Tiptap 会触发一次「空文档」onUpdate；用 ref 跳过首次回调，
   // 避免把刚 join 的双语内容或空白覆盖回 store。
@@ -136,11 +141,23 @@ export function Editor({
       return;
     }
     if (prevHtmlRef.current !== html && editor.getHTML() !== html) {
-      editor.commands.setContent(html || '', true);
+      // WP-A: 流式期间 emitUpdate=false，Tiptap 不触发 onUpdate，
+      // store 不被覆盖、撤销栈不污染；非流式（done 后）emitUpdate=true，
+      // 让 setContent 推一次正常更新 + 在撤销栈留一个边界步骤。
+      editor.commands.setContent(html || '', !streaming);
     }
     prevHtmlRef.current = html;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [html, editor]);
+  }, [html, editor, streaming]);
+
+  // WP-A: 流式期间编辑器只读。streaming 切换瞬间同步一次 setEditable，
+  // 避免 onUpdate → setContent 回流之间出现「半挂」的窗口。
+  // 第二参数 emitUpdate=false：Tiptap 2.x 默认会发 'update' 事件，
+  // 在 StrictMode 开发环境下会让 onChange → store 写入触发不必要的保存。
+  React.useEffect(() => {
+    if (!editor) return;
+    editor.setEditable(!streaming, false);
+  }, [editor, streaming]);
 
   // 把编辑器实例暴露给父组件（如联网配图面板在光标处插图）。
   // 卸载时清成 null：否则父组件在 Editor 销毁后还持有旧 editor 引用，
@@ -151,6 +168,26 @@ export function Editor({
       if (editorRef) editorRef.current = null;
     };
   }, [editor, editorRef]);
+
+  // WP-A: 流式期间正文逐段出现，需要一直把光标/视图锚在底部让用户看到最新字。
+  // 流式期间 setEditable(false)，用户不会上下翻；切到非流式时不再强制滚底。
+  // 监听 html 变化即可（每 ~100ms 一次，肉眼连续）。setTimeout 0 把滚动推到
+  // Tiptap 完成 setContent 的下一拍，确保 scrollHeight 已经反映新内容。
+  React.useEffect(() => {
+    if (!streaming || !editor) return;
+    const view = editor.view;
+    const scroll = () => {
+      const dom = view.dom as HTMLElement | null;
+      if (!dom) return;
+      // EditorContent 外层 .overflow-y-auto 才是滚动容器；直接滚到 ProseMirror
+      // dom 的底部只对内部滚动生效，外层不滚用户看不到末尾。
+      const scrollContainer = dom.closest('.overflow-y-auto') as HTMLElement | null;
+      const target = scrollContainer ?? dom;
+      target.scrollTop = target.scrollHeight;
+    };
+    const timer = window.setTimeout(scroll, 0);
+    return () => window.clearTimeout(timer);
+  }, [html, streaming, editor]);
 
   if (!editor) return <div className={cn('text-ink-muted text-sm p-8', className)}>加载编辑器…</div>;
 

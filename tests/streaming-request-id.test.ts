@@ -69,7 +69,7 @@ describe('SSE 消费循环 (article-page)', () => {
       { type: 'stage', requestId: serverRequestId, stage: 'source', label: '素材已读取' },
       { type: 'stage', requestId: serverRequestId, stage: 'rules', label: '写作风格已写入' },
       { type: 'stage', requestId: serverRequestId, stage: 'streaming', label: '正文正在生成' },
-      { type: 'delta', requestId: serverRequestId, chars: 80, preview: '# 测试标题' },
+      { type: 'delta', requestId: serverRequestId, chars: 80, text: '# 测试标题' },
       { type: 'stage', requestId: serverRequestId, stage: 'checking', label: '基础格式检查' },
       { type: 'done', requestId: serverRequestId, md: '# 测试\n\n正文', title: '测试' },
     ];

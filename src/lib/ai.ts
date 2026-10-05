@@ -106,6 +106,10 @@ ${STYLE_GUIDE}
 - 不生成图片占位符、虚构图片路径或 dataURL；真实配图由用户在编辑器中插入。
 - 文末附"## 来源链接"列表（新闻类）。`;
 
+// WP-C: 大纲阶段只在 length !== 'short' 启用。失败静默降级为空字符串，不影响正文流式。
+// 故意把超时做成 20s：经验值 MiniMax-M2.7 生成 600 token 大纲一般 < 6s，20s 给到 3 倍余量。
+const OUTLINE_TIMEOUT_MS = 20_000;
+
 export async function generateMasterStream(
   brief: Brief,
   material: string,
@@ -119,13 +123,19 @@ export async function generateMasterStream(
     onText?: (delta: string, snapshot: string) => void;
     // 母稿正文已返回、但缺英文版需要追加补译调用时触发（仅双语稿），让进度 UI 能说明还在等什么。
     onBilingual?: () => void;
+    // WP-C: 大纲生成完成后回调（仅 medium/long）。参数是大纲文本；空字符串表示降级。
+    onOutline?: (outline: string) => void;
   } = {},
 ): Promise<string> {
-  const user = buildUserPrompt(brief, material, opts.seriesTitle);
   const system = directive
     ? `${MASTER_SYSTEM}\n\n## 本 Agent 写作指令\n${directive}`
     : MASTER_SYSTEM;
   opts.onPrepared?.();
+  // 大纲只在 length !== 'short' 时生成，生成一次放在 attempt 外面——兜底重试复用同一份，
+  // 不重复调用、不重复花 token，也不让重试时再次等 20s 超时。
+  const outline = brief.length === 'short' ? '' : await generateOutline(brief, material, ai, opts.signal);
+  opts.onOutline?.(outline);
+  const user = buildUserPrompt(brief, material, opts.seriesTitle, outline);
   const attempt = async (useAi?: AiLike) => {
     const stream = getClient(useAi).messages.stream(
       {
@@ -157,6 +167,56 @@ export async function generateMasterStream(
   }
 }
 
+// WP-C: 调用 messages.create 拿一份结构化大纲（最多 600 token），作为正文 prompt 的「写作大纲」段。
+// 任一环节失败（超时/网络/余额）都返回空字符串——大纲只是约束结构，不是内容源，缺失时正文仍应能生成。
+async function generateOutline(brief: Brief, material: string, ai: AiLike | undefined, signal: AbortSignal | undefined): Promise<string> {
+  // 用 AbortController 把用户 signal 与 20s 超时合并；任一触发即终止调用。
+  const controller = new AbortController();
+  const onUserAbort = () => controller.abort();
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener('abort', onUserAbort, { once: true });
+  }
+  const timer = setTimeout(() => controller.abort(), OUTLINE_TIMEOUT_MS);
+  try {
+    const msg = await getClient(ai).messages.create(
+      {
+        model: resolveModel(ai),
+        max_tokens: 600,
+        system: '你是中文写作助手。给定素材与创作指令，只输出一份 Markdown 大纲（"# 标题" + 二级标题分段 + 每段一句话要点），不要解释、不要前缀、不要正文。',
+        messages: [{
+          role: 'user',
+          content: `${buildOutlineBrief(brief, material)}`,
+        }],
+      },
+      { signal: controller.signal },
+    );
+    return extractText(msg).trim();
+  } catch {
+    // 静默降级：超时 / 用户取消 / 网络 / 余额异常等都当无大纲处理，正文阶段继续。
+    return '';
+  } finally {
+    clearTimeout(timer);
+    if (signal) signal.removeEventListener('abort', onUserAbort);
+  }
+}
+
+// 大纲请求的精简 prompt——素材 + 创作指令 + 长度档位就够了，写作风格细则不用塞，
+// 否则 600 token 留给实际大纲的位置会被风格说明吃掉。
+function buildOutlineBrief(brief: Brief, material: string): string {
+  const parts: string[] = [];
+  parts.push('## 素材');
+  parts.push(brief.materialType === 'news' ? `[新闻链接/资讯]\n${material || brief.material}` : material || brief.material);
+  parts.push('');
+  parts.push('## 创作指令');
+  parts.push(`- 角度/立场：${brief.angle || '由素材提炼'}`);
+  parts.push(`- 长度：${brief.length === 'short' ? '短（<800 字）' : brief.length === 'long' ? '长（>2000 字）' : '中（800–2000 字）'}`);
+  if (brief.titleHint) parts.push(`- 标题方向：${brief.titleHint}`);
+  if (brief.cta) parts.push(`- CTA：${brief.cta}`);
+  parts.push('\n仅输出 Markdown 大纲。');
+  return parts.join('\n');
+}
+
 // 只有服务端自己配了 key（env 或 secret file）时才谈"兜底"；用户自带 key 失败时不能拿空的去重试。
 function hasServerFallbackKey(): boolean {
   try {
@@ -186,7 +246,7 @@ async function ensureBilingualMaster(brief: Brief, draft: string, ai?: AiLike, s
   throw new Error('AI 没有返回完整英文版，请重试生成');
 }
 
-function buildUserPrompt(brief: Brief, material: string, seriesTitle?: string): string {
+function buildUserPrompt(brief: Brief, material: string, seriesTitle?: string, outline = ''): string {
   const writingStyle = resolveWritingStyle(brief.voice);
   const parts: string[] = [];
   parts.push('## 素材');
@@ -201,6 +261,8 @@ function buildUserPrompt(brief: Brief, material: string, seriesTitle?: string): 
   if (brief.bilingual) parts.push('- 输出中英双语：中文正文之后附完整英文版，用 "## English Version" 分隔；英文版必须翻译标题、字段名、来源说明和 CTA，不残留中文标签');
   if (brief.cta) parts.push(`- CTA：${brief.cta}`);
   if (brief.materialType === 'news') parts.push(`\n${FACT_CHECK_RULES}`);
+  // WP-C: 大纲段插在「创作指令/FACT_CHECK」之后、「风格执行细则」之前——先结构后语调，避免模型被风格模板带跑而忽略结构约束。
+  if (outline) parts.push(`\n## 写作大纲（严格按此结构展开）\n${outline}\n`);
   parts.push(`\n## 风格执行细则\n${writingStyle.directive}`);
   parts.push('\n仅输出 Markdown。');
   return parts.join('\n');

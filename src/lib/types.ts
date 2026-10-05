@@ -1,3 +1,5 @@
+import type { CrossValidationVerdict } from './generation-events';
+
 export type Voice =
   | 'relaxed'
   | 'editorial'
@@ -47,6 +49,7 @@ export interface Article {
   platformDrafts: Partial<Record<PlatformId, string>>;
   templateId?: string;       // 公众号排版模板；缺省时使用当前默认模板（兼容旧文章）
   conversation?: CreatorMessage[];
+  verdict?: CrossValidationVerdict;
   createdAt: number;
   updatedAt: number;
 }

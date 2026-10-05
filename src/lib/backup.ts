@@ -1,4 +1,5 @@
 import type { Article, CreatorConfig } from './types';
+import type { CrossValidationVerdict } from './generation-events';
 import { DEFAULT_CONFIG } from './config';
 import type { CustomAgent } from './custom-agents';
 import { listCustomAgents, saveCustomAgent } from './custom-agents';
@@ -103,7 +104,40 @@ export function mergeArticles(current: Article[], incoming: Article[]): Article[
 function validateArticles(value: unknown): Article[] {
   if (!Array.isArray(value)) throw new Error('备份中缺少文章列表');
   if (!value.every(isArticle)) throw new Error('备份中包含无法识别的文章数据');
-  return value as Article[];
+  // 清洗 verdict：保留形状合法的；形状非法或缺字段时静默删字段，不阻塞整篇恢复。
+  // 必发事故：page.tsx 的标题行直接 `.map(verdict.issues)` / `.map(verdict.suggestions)`，
+  // 备份里 issues 不是数组时直接白屏。清洗掉畸形 verdict 比拒绝整篇更友好——
+  // 用户丢一个旧 AI 核查摘要总比丢整篇文章好。
+  return value.map(sanitizeArticleVerdict);
+}
+
+function sanitizeArticleVerdict(article: Article): Article {
+  const verdict = (article as { verdict?: unknown }).verdict;
+  if (!isRecord(verdict)) {
+    if (verdict !== undefined) delete article.verdict;
+    return article;
+  }
+  const cleaned = cleanVerdict(verdict);
+  if (!cleaned) {
+    delete article.verdict;
+    return article;
+  }
+  article.verdict = cleaned;
+  return article;
+}
+
+function cleanVerdict(value: Record<string, unknown>): CrossValidationVerdict | null {
+  if (typeof value.passed !== 'boolean') return null;
+  if (typeof value.score !== 'number' || !Number.isFinite(value.score)) return null;
+  if (!Array.isArray(value.issues) || !Array.isArray(value.suggestions)) return null;
+  return {
+    model: typeof value.model === 'string' ? value.model : 'unknown',
+    passed: value.passed,
+    score: value.score,
+    issues: value.issues.filter((item): item is string => typeof item === 'string'),
+    suggestions: value.suggestions.filter((item): item is string => typeof item === 'string'),
+    ...(typeof value.fallback === 'string' ? { fallback: value.fallback } : {}),
+  };
 }
 
 function validateCustomAgents(value: unknown): CustomAgent[] {

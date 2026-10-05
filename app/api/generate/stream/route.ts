@@ -76,10 +76,23 @@ export async function POST(req: NextRequest) {
             signal: req.signal,
             onPrepared: () => send({
               type: 'stage', requestId, stage: 'rules',
-              label: brief.materialType === 'news' ? '新闻来源与引用规则已写入请求' : '写作风格与结构已写入请求',
-              detail: brief.materialType === 'news' ? '要求标明来源、日期，不补写未知事实' : undefined,
+              // 准备阶段：medium/long 还要先拟大纲，正文才回来。文案写「正在拟大纲」
+              // 而不是「结构已写入」，否则用户会以为卡在这里——等大纲回来后 onOutline
+              // 再把 stage 推进到「大纲已拟定」。
+              label: brief.materialType === 'news' ? '正在准备新闻来源与引用规则' : '正在拟大纲',
+              detail: brief.materialType === 'news' ? '要求标明来源、日期，不补写未知事实' : 'medium/long 篇幅先拟大纲，再生成正文；short 跳过此步',
               at: Date.now(),
             }),
+            // WP-C: medium/long 时 ai.ts 先调一次 messages.create 拟大纲，命中后
+            // 复用现有 'rules' stage（不新增枚举值），客户端文案改成「大纲已拟定」。
+            onOutline: (outline) => {
+              if (!outline) return;
+              send({
+                type: 'stage', requestId, stage: 'rules',
+                label: '大纲已拟定',
+                at: Date.now(),
+              });
+            },
             onRequested: () => send({
               type: 'stage', requestId, stage: 'waiting', label: '生成请求已创建，等待首段返回', at: Date.now(),
             }),
@@ -90,17 +103,28 @@ export async function POST(req: NextRequest) {
                 send({
                   type: 'stage', requestId, stage: 'streaming',
                   label: brief.materialType === 'news' ? '新闻稿正在生成' : '正文正在生成',
-                  detail: '下方只展示模型实际返回的文字片段', at: now,
+                  at: now,
                 });
               }
-              if (snapshot.length - lastSentChars >= 120 || now - lastSentAt >= 800) {
-                lastSentChars = snapshot.length;
+              // WP-A: 节流改为只按时间，每 ~100ms 推一次。客户端无节流，
+              // 服务端发增量 text + 可选 reset。lastSentChars 漏掉兜底重试
+              // 导致 snapshot 变短的情况——一旦发现就重置基准并发 reset:true，
+              // 客户端清空 streamText 重建，避免尾部错位叠加。
+              if (snapshot.length < lastSentChars) {
+                lastSentChars = 0;
+                send({
+                  type: 'delta', requestId, chars: 0, text: '', reset: true, at: now,
+                });
                 lastSentAt = now;
+                return;
+              }
+              if (now - lastSentAt >= 100) {
                 send({
                   type: 'delta', requestId, chars: snapshot.length,
-                  // 保留换行的 1500 字尾部快照：客户端流面板按段落展示，压成单行会读不了。
-                  preview: snapshot.slice(-1500), at: now,
+                  text: snapshot.slice(lastSentChars), at: now,
                 });
+                lastSentChars = snapshot.length;
+                lastSentAt = now;
               }
             },
             onBilingual: () => send({
@@ -111,11 +135,11 @@ export async function POST(req: NextRequest) {
             }),
           });
 
-          // 冲刷末段：即使末尾增量不足阈值，也要把最终字数推给客户端。
+          // 冲刷末段：流式末尾不足 100ms 节流的部分，done 前再推一次增量。
           if (md.length - lastSentChars > 0) {
             send({
               type: 'delta', requestId, chars: md.length,
-              preview: md.slice(-1500), at: Date.now(),
+              text: md.slice(lastSentChars), at: Date.now(),
             });
           }
 

@@ -144,6 +144,48 @@ describe('parseBackup', () => {
     expect(parsed.articles.length).toBe(1);
   });
 
+  it('verdict 形状合法：完整保留 passed / score / issues / suggestions', () => {
+    const article = makeArticle('a1');
+    article.verdict = {
+      model: 'claude-cross-check',
+      passed: true,
+      score: 92,
+      issues: ['原文缺少第二段过渡', '结论段缺少链接'],
+      suggestions: ['补一段桥接', '加上原始来源'],
+    };
+    const json = JSON.stringify({
+      format: BACKUP_FORMAT, version: BACKUP_VERSION, exportedAt: '',
+      articles: [article],
+    });
+    const parsed = parseBackup(json);
+    expect(parsed.articles.length).toBe(1);
+    expect(parsed.articles[0].verdict?.passed).toBe(true);
+    expect(parsed.articles[0].verdict?.score).toBe(92);
+    expect(parsed.articles[0].verdict?.issues).toEqual(['原文缺少第二段过渡', '结论段缺少链接']);
+    expect(parsed.articles[0].verdict?.suggestions).toEqual(['补一段桥接', '加上原始来源']);
+    expect(parsed.articles[0].verdict?.model).toBe('claude-cross-check');
+  });
+
+  it('verdict 形状非法（passed 非 bool / issues 非数组）：导入成功但 verdict 为 undefined', () => {
+    // 三种典型畸形：(a) passed 不是 boolean；(b) issues 不是数组；
+    // (c) suggestions 不是数组。每种情况都静默丢弃 verdict，不阻塞整篇恢复。
+    const malformedA = makeArticle('bad-1');
+    (malformedA as unknown as Record<string, unknown>).verdict = { passed: 'not-bool', score: 80, issues: [], suggestions: [] };
+    const malformedB = makeArticle('bad-2');
+    (malformedB as unknown as Record<string, unknown>).verdict = { passed: true, score: 80, issues: 'not-array', suggestions: [] };
+    const malformedC = makeArticle('bad-3');
+    (malformedC as unknown as Record<string, unknown>).verdict = { passed: true, score: 80, issues: [], suggestions: 42 };
+    const json = JSON.stringify({
+      format: BACKUP_FORMAT, version: BACKUP_VERSION, exportedAt: '',
+      articles: [malformedA, malformedB, malformedC],
+    });
+    const parsed = parseBackup(json);
+    expect(parsed.articles.length).toBe(3);
+    for (const article of parsed.articles) {
+      expect(article.verdict).toBeUndefined();
+    }
+  });
+
   it('非法 JSON：抛错', () => {
     expect(() => parseBackup('{ not json')).toThrow(/有效的 JSON/);
   });

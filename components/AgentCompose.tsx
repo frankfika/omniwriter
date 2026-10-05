@@ -13,9 +13,7 @@ import { getCustomAgent } from '@/src/lib/custom-agents';
 import { PLATFORMS } from '@/src/lib/platforms';
 import { resolveWritingStyle, WRITING_STYLES } from '@/src/lib/styles';
 import type { Brief, PlatformId, Voice } from '@/src/lib/types';
-import type { GenerationViewState } from '@/src/lib/generation-events';
 import { composeFetchedMaterial, extractHttpUrls, fetchMaterialSources } from '@/src/lib/material-input';
-import { GenerationProgress } from './GenerationProgress';
 
 interface Props {
   brief: Brief;
@@ -24,24 +22,17 @@ interface Props {
   onImportMaterial: (material: string) => void;
   onError?: (message: string) => void;
   generating: boolean;
-  generationProgress: GenerationViewState | null;
-  onCancelGeneration: () => void;
 }
 
 // Agent 优先的极简编排器：只露出「素材 + 发布地点 + 生成」，
 // 风格/长度/标题/CTA/双语/细粒度平台全部折叠进高级抽屉。
-export function AgentCompose({ brief, onChange, onGenerate, onImportMaterial, onError, generating, generationProgress, onCancelGeneration }: Props) {
+// WP-A 删除 generationProgress / onCancelGeneration 死分支 prop：
+//   page.tsx 在 generating 时不再渲染本组件，进度条永远不可见。
+export function AgentCompose({ brief, onChange, onGenerate, onImportMaterial, onError, generating }: Props) {
   const { aiReady, refresh } = useAiStatus();
   const [showGuide, setShowGuide] = React.useState(false);
   const [fetching, setFetching] = React.useState(false);
   const advancedRef = React.useRef<HTMLDetailsElement>(null);
-  const progressRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    if (!generating) return;
-    const frame = window.requestAnimationFrame(() => progressRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
-    return () => window.cancelAnimationFrame(frame);
-  }, [generating]);
 
   const agent = resolveAgent(brief.agentId) ?? getCustomAgent(brief.agentId);
 
@@ -207,20 +198,16 @@ export function AgentCompose({ brief, onChange, onGenerate, onImportMaterial, on
         </div>
       </details>
 
-      <div ref={progressRef} className="sticky bottom-0 z-10 -mx-5 mt-1 border-t border-ink-line/80 bg-white px-5 pb-1 pt-3">
-        {generating && generationProgress ? (
-          <GenerationProgress state={generationProgress} materialType={brief.materialType} platformCount={brief.platforms.length} onCancel={onCancelGeneration}/>
-        ) : (
-          <Button
-            onClick={isCopyOnly ? () => onImportMaterial(brief.material) : handleGenerate}
-            disabled={!brief.material.trim()}
-            size="lg"
-            className="w-full"
-          >
-            {isCopyOnly ? <FileInput size={16} className="mr-1.5"/> : <Sparkles size={16} className="mr-1.5"/>}
-            {isCopyOnly ? '导入并排版' : '开始生成'}
-          </Button>
-        )}
+      <div className="sticky bottom-0 z-10 -mx-5 mt-1 border-t border-ink-line/80 bg-white px-5 pb-1 pt-3">
+        <Button
+          onClick={isCopyOnly ? () => onImportMaterial(brief.material) : handleGenerate}
+          disabled={!brief.material.trim() || generating}
+          size="lg"
+          className="w-full"
+        >
+          {isCopyOnly ? <FileInput size={16} className="mr-1.5"/> : <Sparkles size={16} className="mr-1.5"/>}
+          {isCopyOnly ? '导入并排版' : (generating ? '生成中…' : '开始生成')}
+        </Button>
         {!brief.material.trim() && <p className="mt-1.5 text-center text-xs text-ink-muted">先放入素材，再生成母稿</p>}
         {showGuide && (
           <div className="mt-2">

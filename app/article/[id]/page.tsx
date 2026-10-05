@@ -39,6 +39,9 @@ import { validateMarkdown } from '@/src/lib/editorial';
 // MiniMax 在同一账号高并发长文本时偶尔会断开连接；2 路并发在速度与稳定性之间更合适。
 const PLATFORM_BATCH_CONCURRENCY = 2;
 type WorkspaceStep = 'brief' | 'editor' | 'publish';
+// 标题行「润色」按钮发给主编的指令：去 AI 腔、收紧句子与排比、对标题拟题，
+//    保留事实 / 数字 / 引语 / 链接 / 图片 / 图注；只输出修改后的完整 Markdown。
+const POLISH_INSTRUCTION = '去 AI 腔、收紧句子长度与排比、对标题做最后一轮拟题；保留所有事实、数字、引语、链接、图片与图注；只输出一篇修改后的完整 Markdown';
 
 function initialWorkspaceStep(searchParams: Readonly<URLSearchParams>): WorkspaceStep {
   const step = searchParams.get('step');
@@ -61,11 +64,21 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
 
   const [generating, setGenerating] = React.useState(false);
   const [generationProgress, setGenerationProgress] = React.useState<GenerationViewState | null>(null);
+  // WP-A: 流式期间正文以纯文本形式累积在 streamText 里，<Editor streaming>
+  // 把它渲染进编辑器；done 时把整篇 markdown 走原 setContent 路径落地，
+  // 同时清空 streamText。reset:true 时客户端直接清空重建。
+  const [streamText, setStreamText] = React.useState('');
+  // 镜像 ref：闭包里的 streamText 是创建时刻的值，不会随 React 状态更新同步。
+  // AbortError catch 必须用 ref 读最新值，否则新文章中途停止会把空串落 store，
+  // 把已经写出来的半成品丢掉（违反方案「停止时不覆盖原稿」承诺）。
+  const streamTextRef = React.useRef('');
+  React.useEffect(() => { streamTextRef.current = streamText; }, [streamText]);
   // 交叉验证摘要：verify 在 done 之后异步到达（服务端核查最长 90 秒），主读循环
-  // 读到 done 就返回，由后台读流消费迟到的 verify。结果落到独立 state，在编辑器
-  // 标题行常驻。verdictRunRef 用来作废过期结果：refine 成功或新一轮生成都会推进
-  // 计数，迟到的 verify 对不上号就丢弃，避免盖掉改稿/重新生成后的正文。
-  const [verdict, setVerdict] = React.useState<CrossValidationVerdict | null>(null);
+  // 读到 done 就返回，由后台读流消费迟到的 verify。verdict 跟着 article 持久化
+  // 落到 store，刷新页面仍然存在；verdictRunRef 用来作废过期结果：refine 成功或
+  // 新一轮生成都会推进计数，迟到的 verify 对不上号就丢弃，避免盖掉改稿/重新生
+  // 成后的正文。
+  const verdict = article?.verdict ?? null;
   const verdictRunRef = React.useRef(0);
   const generationController = React.useRef<AbortController | null>(null);
   const autoGenerateStarted = React.useRef(false);
@@ -377,7 +390,10 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
     setGenerating(true);
     // 新一轮生成开始：作废上一轮可能还在路上的迟到 verify（见 verdictRunRef 注释）。
     const verdictRun = ++verdictRunRef.current;
-    setVerdict(null);
+    // 闭包里捕获当前 articleId：verify 在后台 pump 消费、切文章后迟到的 verify
+    // 也能落回当时的那篇（更新会与新文章的 ID 对齐而触发 judgmentRun 拦截则丢弃）。
+    const articleId = article.id;
+    update(articleId, { verdict: undefined });
     setGenerationProgress({
       requestId: localRequestId,
       startedAt,
@@ -386,6 +402,12 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
       chars: 0,
       completed: [],
     });
+    // WP-A: 记下「本次生成开始前正文是否为空」，done 路径不需要它，但
+    // AbortError catch 时区分两种落盘策略。新文章中途停止 → streamText 落
+    // store 保留已生成部分；旧文章中途停止 → 不动 setContent，恢复原稿。
+    const hadContent = Boolean(article.content.trim());
+    // 流式期间正文累积在 streamText，done 时清空、setContent 接管落 store。
+    setStreamText('');
     let generatedMaster = '';
     try {
       const res = await fetch('/api/generate/stream', {
@@ -424,31 +446,33 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
             label: event.label,
             detail: event.detail,
             chars: previous?.chars ?? 0,
-            preview: previous?.preview,
             completed: previous && previous.stage !== event.stage
               ? Array.from(new Set([...previous.completed, previous.stage]))
               : previous?.completed ?? [],
           }));
         } else if (event.type === 'delta') {
+          // WP-A: text 是增量片段；服务端兜底重试时 snapshot 可能变短，
+          // 会先发一个 reset:true 让客户端清空 streamText 再用事件重建，
+          // 避免把前一次失败的尾部错位叠加到新文本上。
+          setStreamText((previous) => (event.reset ? event.text : previous + event.text));
           setGenerationProgress((previous) => previous ? {
             ...previous,
             requestId: event.requestId,
             chars: event.chars,
-            preview: event.preview,
           } : {
             requestId: event.requestId,
             startedAt,
             stage: 'streaming',
             label: '正文正在生成',
             chars: event.chars,
-            preview: event.preview,
             completed: [],
           });
         } else if (event.type === 'verify') {
-          // verify 现在只走独立的 verdict state；不再写入 generationProgress（无消费者）。
-          // 迟到的 verify 只对触发它的那轮生成负责：refine 成功或新一轮生成都会
-          // 推进 verdictRunRef，对不上号的结果直接丢弃，不落标题行。
-          if (verdictRun === verdictRunRef.current) setVerdict(event.verdict);
+          // verify 落回 article.verdict（持久化到 store）。闭包里捕获 articleId，
+          // 切文章后迟到的 verify 也能落回当时的那篇，不会写错。
+          // verdictRunRef 仍在追踪最新生成：refine 成功或新一轮生成都会推进计数，
+          // 对不上号的结果直接丢弃，不盖掉改稿/重新生成后的正文。
+          if (verdictRun === verdictRunRef.current) update(articleId, { verdict: event.verdict });
         } else if (event.type === 'done') {
           completed = true;
           generatedMaster = event.md;
@@ -459,10 +483,10 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
             label: `已生成并完成基础格式检查 · ${Math.max(1, Math.round(event.durationMs / 1000))} 秒`,
             detail: event.issues ? `发现 ${event.issues} 项编辑提醒，可在发布页查看` : '没有发现格式问题',
             chars: event.md.length,
-            preview: previous?.preview,
             completed: previous?.completed ?? [],
           }));
           setContent(article.id, markdownToInlineHtml(event.md));
+          setStreamText('');
           setLanguage('zh');
           if (event.title) onTitle(event.title);
         } else if (event.type === 'error') {
@@ -499,7 +523,6 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
       if (!completed) throw new Error('生成连接提前结束，请重试');
       // done 已到、正文已交付：不再等核查，后台读流静默消费迟到事件（含读取异常）。
       void pump(() => false).catch(() => {});
-      await new Promise((resolve) => setTimeout(resolve, 500));
       selectWorkspaceStep('editor');
       if (briefSnapshot.platforms.length > 0) {
         void runPlatformBatch({
@@ -512,8 +535,17 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
       }
     } catch (e) {
       if ((e as Error).name === 'AbortError') {
+        // WP-A 停止语义：原稿为空 → 把已写出的 streamText 落到 store，保留新文章；
+        // 原稿非空 → 不动 setContent（仍保留原稿）。两种都先关流式态再提示。
+        // 必须用 streamTextRef 读最新值：catch 是 async 闭包，streamText state
+        // 在这里看不到流式期间的更新，用 ref 镜像才能拿到最新半成品。
+        if (!hadContent) {
+          setContent(article.id, markdownToInlineHtml(streamTextRef.current));
+        }
+        setStreamText('');
         showError('已停止生成，原稿没有被覆盖。');
       } else {
+        setStreamText('');
         showError((e as Error).message || '生成失败');
       }
     } finally {
@@ -689,7 +721,7 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
     // 改稿已改变正文，生成时那次的核查结论不再代表当前稿，清掉避免误导；
     // 同时推进 verdictRunRef，让仍在路上的迟到 verify 事件作废。
     verdictRunRef.current += 1;
-    setVerdict(null);
+    update(article.id, { verdict: undefined });
     if (payload.title) onTitle(payload.title);
     setLanguage('zh');
     selectWorkspaceStep('editor');
@@ -726,6 +758,24 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
       await runRefine(applyVerdictInstruction(verdict), 'chief-editor', '核查建议');
     } catch (reason) {
       // 与 onCreativeCommand 的失败路径一致：顶部横幅 + 对话里留一条失败记录。
+      const message = (reason as Error).message || '这次操作没有完成，请重试';
+      showError(message);
+      addConversationMessage('assistant', message, 'chief-editor');
+    } finally {
+      setCommandBusy(false);
+    }
+  };
+
+  // 标题行「润色」按钮：用户看完整稿后，按主编改稿口径去 AI 腔 + 收紧句子 + 拟题。
+  // 复用 runRefine（已自动清掉 verdict）；失败路径与 onCreativeCommand / onApplyVerdict 一致。
+  const onPolish = async () => {
+    if (commandBusy || generating || Boolean(batchProgress)) return;
+    if (!article.content.trim()) return;
+    addConversationMessage('user', '润色');
+    setCommandBusy(true);
+    try {
+      await runRefine(POLISH_INSTRUCTION, 'chief-editor', '润色');
+    } catch (reason) {
       const message = (reason as Error).message || '这次操作没有完成，请重试';
       showError(message);
       addConversationMessage('assistant', message, 'chief-editor');
@@ -868,9 +918,9 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
   };
 
   const briefPanel = article.brief.agentId && (resolveAgent(article.brief.agentId) ?? getCustomAgent(article.brief.agentId)) ? (
-    <AgentCompose brief={article.brief} onChange={onBrief} onGenerate={onGenerate} onImportMaterial={onImportMaterial} onError={showError} generating={generating} generationProgress={generationProgress} onCancelGeneration={onCancelGeneration} />
+    <AgentCompose brief={article.brief} onChange={onBrief} onGenerate={onGenerate} onImportMaterial={onImportMaterial} onError={showError} generating={generating} />
   ) : (
-    <BriefPanel brief={article.brief} onChange={onBrief} onGenerate={onGenerate} onImportMaterial={onImportMaterial} onError={showError} generating={generating} generationProgress={generationProgress} onCancelGeneration={onCancelGeneration} />
+    <BriefPanel brief={article.brief} onChange={onBrief} onGenerate={onGenerate} onImportMaterial={onImportMaterial} onError={showError} generating={generating} />
   );
 
   const contentParts = splitBilingualContent(article.content);
@@ -973,6 +1023,20 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
                 )}
               </div>
             </details>
+          )}
+          {article.content.trim() && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="shrink-0"
+              // 平台批量生成中（batchProgress）按钮看起来可点但 handler 会静默 return，
+              // 把 batchProgress 一并禁掉避免误导。
+              disabled={commandBusy || Boolean(batchProgress) || !article.content.trim()}
+              onClick={() => { void onPolish(); }}
+              title="按主编口径去 AI 腔、收紧句子与排比、对标题做最后一轮拟题"
+            >
+              <PencilLine size={12}/><span className="hidden sm:inline">润色</span>
+            </Button>
           )}
           {!batchProgress && article.content.trim() && (
             <button
@@ -1149,10 +1213,33 @@ export default function ArticlePage({ params }: { params: { id: string } }) {
         )}
 
         <div className="flex-1 min-h-0 overflow-hidden">
+          {/* WP-A: 生成中把「细条进度 + 编辑器嵌入」叠在同一个视图里——用户在编辑
+              器里盯着逐字出现的正文，标题行 + 工具栏沿用 editorPanel。生成中用
+              单独的 'streaming' key 重挂编辑器，done 时切到 updatedAt 重新挂载，
+              清空流式期间堆积的撤销栈条目。 */}
           {generating && generationProgress && (
-            <div className="flex h-full items-center justify-center p-5">
-              <div className="w-full max-w-2xl">
-                <GenerationProgress state={generationProgress} materialType={article.brief.materialType} platformCount={article.brief.platforms.length} onCancel={onCancelGeneration}/>
+            <div className="h-full max-w-4xl mx-auto bg-white border-x border-ink-line flex flex-col">
+              <GenerationProgress state={generationProgress} onCancel={onCancelGeneration}/>
+              {editorView === 'images' && (
+                <ImageSearchPanel
+                  sourceUrl={firstHttpUrl(article.brief.material)}
+                  initialQuery={renderedTitle}
+                  content={selectedContent}
+                  onChange={updateSelectedContent}
+                  onClose={() => setEditorView('content')}
+                  onInsertAtCursor={insertImageAtCursor}
+                />
+              )}
+              <div className={editorView === 'images' ? 'hidden' : 'flex-1 min-h-0'}>
+                <Editor
+                  key="streaming"
+                  streaming
+                  html={markdownToInlineHtml(streamText)}
+                  onChange={() => {/* 流式期间编辑器只读，忽略 onChange */}}
+                  onFindImages={() => setEditorView('images')}
+                  editorRef={editorInstanceRef}
+                  placeholder={language === 'zh' ? '正文正在生成…' : 'Writing…'}
+                />
               </div>
             </div>
           )}
